@@ -1,5 +1,5 @@
 import React from 'react';
-import { TriangleAlert, Droplets, CheckCircle2 } from 'lucide-react';
+import { TriangleAlert, Droplets, CheckCircle2, Activity } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { SensorLog } from '../types';
@@ -25,15 +25,20 @@ export function SensorCard({ data, sensorName }: SensorCardProps) {
     );
   }
 
+  const lastSeen = new Date(data.recorded_at).getTime();
+  const isOffline = (Date.now() - lastSeen) / (1000 * 60) > 5;
+
   const isTempHigh = data.temperature > 30;
   const isHumidHigh = data.humidity > 80;
-  const isNormal = !isTempHigh && !isHumidHigh;
+  const isNormal = !isTempHigh && !isHumidHigh && !isOffline;
 
   return (
     <div
       className={cn(
         "relative flex flex-col p-2 sm:p-3 rounded-2xl sm:rounded-3xl border transition-colors duration-300 shadow-sm",
-        isTempHigh && isHumidHigh
+        isOffline
+          ? "bg-zinc-50 dark:bg-zinc-900/20 border-zinc-200 dark:border-zinc-800/50 grayscale"
+          : isTempHigh && isHumidHigh
           ? "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900/50"
           : isTempHigh
           ? "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900/50"
@@ -43,18 +48,21 @@ export function SensorCard({ data, sensorName }: SensorCardProps) {
       )}
     >
       <div className="flex justify-between items-center mb-1 sm:mb-2">
-        <h3 className="text-zinc-500 dark:text-zinc-400 font-medium text-[9px] sm:text-[11px]">{sensorName}</h3>
+        <h3 className="text-zinc-500 dark:text-zinc-400 font-medium text-[9px] sm:text-[11px]">
+          {sensorName} {isOffline && <span className="text-zinc-400 ml-1">(Offline)</span>}
+        </h3>
         <div className="flex gap-1">
+          {isOffline && <Activity className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-zinc-400 animate-pulse" />}
           {isNormal && <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-500" />}
-          {isTempHigh && <TriangleAlert className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-500" />}
-          {isHumidHigh && <Droplets className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-orange-500" />}
+          {!isOffline && isTempHigh && <TriangleAlert className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-500" />}
+          {!isOffline && isHumidHigh && <Droplets className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-orange-500" />}
         </div>
       </div>
 
       <div className="flex items-baseline gap-1 mb-1 sm:mb-2">
         <span className={cn(
           "text-xl sm:text-3xl font-light tracking-tight",
-          isTempHigh ? "text-red-600 dark:text-red-400" : "text-zinc-900 dark:text-zinc-100"
+          isOffline ? "text-zinc-400" : isTempHigh ? "text-red-600 dark:text-red-400" : "text-zinc-900 dark:text-zinc-100"
         )}>
           {data.temperature.toFixed(1)}
         </span>

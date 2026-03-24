@@ -161,13 +161,20 @@ export default function App() {
     const sensors = Object.values(latestData) as SensorLog[];
     if (sensors.length === 0) return 'loading';
     
+    // ตรวจสอบว่าเซนเซอร์ออฟไลน์หรือไม่ (ไม่มีข้อมูลใหม่เกิน 5 นาที)
+    const lastSeen = new Date(sensors[0].recorded_at).getTime();
+    const diffMinutes = (currentTime.getTime() - lastSeen) / (1000 * 60);
+    const isOffline = diffMinutes > 5;
+
+    if (isOffline) return 'offline';
+    
     const hasCritical = sensors.some(s => s.temperature > 30 && s.humidity > 80);
     const hasWarning = sensors.some(s => s.temperature > 30 || s.humidity > 80);
     
     if (hasCritical) return 'critical';
     if (hasWarning) return 'warning';
     return 'normal';
-  }, [latestData]);
+  }, [latestData, currentTime]);
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-[#09090b] text-zinc-900 dark:text-zinc-100 font-sans selection:bg-zinc-200 dark:selection:bg-zinc-800 transition-colors duration-300">
@@ -229,23 +236,30 @@ export default function App() {
               ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/50 text-emerald-800 dark:text-emerald-300'
               : systemStatus === 'warning'
               ? 'bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-900/50 text-orange-800 dark:text-orange-300'
+              : systemStatus === 'offline'
+              ? 'bg-zinc-100 dark:bg-zinc-900/40 border-zinc-300 dark:border-zinc-700 text-zinc-800 dark:text-zinc-300 animate-pulse'
               : 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900/50 text-red-800 dark:text-red-300'
           }`}>
             <div className={`p-1.5 sm:p-2 rounded-full shrink-0 ${
               systemStatus === 'normal' ? 'bg-emerald-100 dark:bg-emerald-900/50' :
               systemStatus === 'warning' ? 'bg-orange-100 dark:bg-orange-900/50' :
+              systemStatus === 'offline' ? 'bg-zinc-200 dark:bg-zinc-800' :
               'bg-red-100 dark:bg-red-900/50'
             }`}>
-              {systemStatus === 'normal' ? <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6" /> : <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6" />}
+              {systemStatus === 'normal' ? <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6" /> : 
+               systemStatus === 'offline' ? <Activity className="w-5 h-5 sm:w-6 sm:h-6 animate-spin-slow" /> :
+               <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6" />}
             </div>
             <div>
               <h2 className="font-semibold text-sm sm:text-lg leading-tight">
                 {systemStatus === 'normal' ? 'ระบบปกติ' :
                  systemStatus === 'warning' ? 'พบความผิดปกติ' :
+                 systemStatus === 'offline' ? 'เซนเซอร์ขาดการเชื่อมต่อ (Offline)' :
                  'วิกฤต: พบความผิดปกติรุนแรง'}
               </h2>
               <p className="text-[10px] sm:text-sm opacity-80 mt-0.5">
                 {systemStatus === 'normal' ? 'อุณหภูมิและความชื้นอยู่ในเกณฑ์มาตรฐาน' :
+                 systemStatus === 'offline' ? 'ไม่ได้รับข้อมูลใหม่เกิน 5 นาที กรุณาตรวจสอบอุปกรณ์' :
                  'กรุณาตรวจสอบค่าเซ็นเซอร์ที่มีการแจ้งเตือน'}
               </p>
             </div>
