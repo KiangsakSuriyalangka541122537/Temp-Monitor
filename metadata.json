@@ -1,0 +1,5 @@
+{
+  "name": "Server Room Monitor",
+  "description": "React + TypeScript Web Dashboard for Server Room Monitor",
+  "requestFramePermissions": []
+}
