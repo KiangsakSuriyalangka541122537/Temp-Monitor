@@ -54,18 +54,25 @@ export default function App() {
 
         if (latest && latest.length > 0) {
           setIsConnected(true);
-          const newLatestData: Record<number, SensorLog> = {};
-          latest.forEach((log: any) => {
-            const sId = log.sensor_id || 1;
-            newLatestData[sId] = {
-              id: log.id || Date.now(),
-              sensor_id: sId,
-              sensor_name: log.sensor_name || `เซนเซอร์ ${sId}`,
-              temperature: log.temperature,
-              humidity: log.humidity,
+          const log = latest[0];
+          const newLatestData: Record<number, SensorLog> = {
+            1: {
+              id: log.id,
+              sensor_id: 1,
+              sensor_name: 'เซนเซอร์ 1',
+              temperature: log.t1 || 0,
+              humidity: log.h1 || 0,
               recorded_at: log.created_at
-            };
-          });
+            },
+            2: {
+              id: log.id,
+              sensor_id: 2,
+              sensor_name: 'เซนเซอร์ 2',
+              temperature: log.t2 || 0,
+              humidity: log.h2 || 0,
+              recorded_at: log.created_at
+            }
+          };
           setLatestData(newLatestData);
           setLastUpdated(new Date());
         }
@@ -75,18 +82,31 @@ export default function App() {
           .from('Temp-sketch_mar24a')
           .select('*')
           .order('created_at', { ascending: false })
-          .limit(200); // เพิ่ม limit เพื่อรองรับหลายเซนเซอร์
+          .limit(100);
 
         if (!historyError && history) {
-          const mappedHistory: SensorLog[] = history.map((log: any, index: number) => ({
-            id: log.id || index,
-            sensor_id: log.sensor_id || 1,
-            sensor_name: log.sensor_name || `เซนเซอร์ ${log.sensor_id || 1}`,
-            temperature: log.temperature,
-            humidity: log.humidity,
-            recorded_at: log.created_at
-          })).reverse();
-          setChartData(mappedHistory);
+          const mappedHistory: SensorLog[] = [];
+          history.forEach((log: any) => {
+            // เพิ่มข้อมูลเซนเซอร์ 1
+            mappedHistory.push({
+              id: log.id * 2, // สร้าง id จำลองให้ไม่ซ้ำ
+              sensor_id: 1,
+              sensor_name: 'เซนเซอร์ 1',
+              temperature: log.t1 || 0,
+              humidity: log.h1 || 0,
+              recorded_at: log.created_at
+            });
+            // เพิ่มข้อมูลเซนเซอร์ 2
+            mappedHistory.push({
+              id: log.id * 2 + 1,
+              sensor_id: 2,
+              sensor_name: 'เซนเซอร์ 2',
+              temperature: log.t2 || 0,
+              humidity: log.h2 || 0,
+              recorded_at: log.created_at
+            });
+          });
+          setChartData(mappedHistory.reverse());
           
           // กรองข้อมูลที่ผิดปกติมาแสดงใน Alert Log
           const alerts = mappedHistory
@@ -121,43 +141,56 @@ export default function App() {
         { event: 'INSERT', schema: 'public', table: 'Temp-sketch_mar24a' },
         (payload) => {
           const newLog = payload.new;
-          const sId = newLog.sensor_id || 1;
-          const mappedLog: SensorLog = {
-            id: newLog.id || Date.now(),
-            sensor_id: sId,
-            sensor_name: newLog.sensor_name || `เซนเซอร์ ${sId}`,
-            temperature: newLog.temperature,
-            humidity: newLog.humidity,
+          
+          // ข้อมูลเซนเซอร์ 1
+          const log1: SensorLog = {
+            id: newLog.id * 2,
+            sensor_id: 1,
+            sensor_name: 'เซนเซอร์ 1',
+            temperature: newLog.t1 || 0,
+            humidity: newLog.h1 || 0,
+            recorded_at: newLog.created_at
+          };
+
+          // ข้อมูลเซนเซอร์ 2
+          const log2: SensorLog = {
+            id: newLog.id * 2 + 1,
+            sensor_id: 2,
+            sensor_name: 'เซนเซอร์ 2',
+            temperature: newLog.t2 || 0,
+            humidity: newLog.h2 || 0,
             recorded_at: newLog.created_at
           };
           
           // อัพเดทข้อมูลล่าสุด
-          setLatestData(prev => ({
-            ...prev,
-            [mappedLog.sensor_id]: mappedLog
-          }));
+          setLatestData({
+            1: log1,
+            2: log2
+          });
           setLastUpdated(new Date());
 
           // อัพเดทข้อมูลกราฟ
           setChartData(prev => {
-            const newData = [...prev, mappedLog];
-            // เก็บข้อมูลไว้แค่ 100 รายการล่าสุดเพื่อไม่ให้กราฟหน่วง
-            if (newData.length > 100) return newData.slice(newData.length - 100);
+            const newData = [...prev, log1, log2];
+            // เก็บข้อมูลไว้แค่ 200 รายการล่าสุด (100 จุดเวลา x 2 เซนเซอร์)
+            if (newData.length > 200) return newData.slice(newData.length - 200);
             return newData;
           });
 
           // ตรวจสอบและเพิ่ม Alert ถ้าค่าผิดปกติ
-          if (mappedLog.temperature > 30 || mappedLog.humidity > 80) {
-            const newAlert: AlertLogType = {
-              ...mappedLog,
-              status: mappedLog.temperature > 30 && mappedLog.humidity > 80 
-                ? 'both_high' 
-                : mappedLog.temperature > 30 
-                  ? 'temperature_high' 
-                  : 'humidity_high'
-            };
-            setAlertLogs(prev => [newAlert, ...prev].slice(0, 50)); // เก็บประวัติ 50 รายการ
-          }
+          [log1, log2].forEach(log => {
+            if (log.temperature > 30 || log.humidity > 80) {
+              const newAlert: AlertLogType = {
+                ...log,
+                status: log.temperature > 30 && log.humidity > 80 
+                  ? 'both_high' 
+                  : log.temperature > 30 
+                    ? 'temperature_high' 
+                    : 'humidity_high'
+              };
+              setAlertLogs(prev => [newAlert, ...prev].slice(0, 50));
+            }
+          });
         }
       )
       .subscribe();
