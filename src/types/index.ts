@@ -9,6 +9,7 @@ export interface SensorLog {
 
 export interface AlertLog {
   id: number;
+  sensor_id: number;
   sensor_name: string;
   temperature: number;
   humidity: number;

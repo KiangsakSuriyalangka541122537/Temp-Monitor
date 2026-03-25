@@ -29,12 +29,13 @@ ChartJS.register(
 
 interface SensorChartProps {
   data: SensorLog[];
+  sensorNames: Record<number, string>;
   timeRange: 'realtime' | '24h' | '7d' | '30d';
   onTimeRangeChange: (range: 'realtime' | '24h' | '7d' | '30d') => void;
   theme: 'light' | 'dark';
 }
 
-export function SensorChart({ data, timeRange, onTimeRangeChange, theme }: SensorChartProps) {
+export function SensorChart({ data, sensorNames, timeRange, onTimeRangeChange, theme }: SensorChartProps) {
   const isDark = theme === 'dark';
 
   // Prepare Chart.js data
@@ -58,7 +59,7 @@ export function SensorChart({ data, timeRange, onTimeRangeChange, theme }: Senso
 
     sensors.forEach((sId, index) => {
       const sensorData = sortedData.filter(log => log.sensor_id === sId);
-      const sensorName = sensorData[0]?.sensor_name || `เซนเซอร์ ${sId}`;
+      const sensorName = sensorNames[sId] || sensorData[0]?.sensor_name || `เซนเซอร์ ${sId}`;
       const colorSet = colors[index % colors.length];
 
       // Map data to the global timestamps to ensure alignment

@@ -5,9 +5,10 @@ import { AlertLog as AlertLogType } from '../types';
 
 interface AlertLogProps {
   logs: AlertLogType[];
+  sensorNames: Record<number, string>;
 }
 
-export function AlertLog({ logs }: AlertLogProps) {
+export function AlertLog({ logs, sensorNames }: AlertLogProps) {
   return (
     <div className="bg-white dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800/80 rounded-3xl overflow-hidden flex flex-col shadow-sm h-full min-h-[400px] lg:min-h-0">
       <div className="p-2 sm:p-3 border-b border-zinc-100 dark:border-zinc-800/50 shrink-0">
@@ -38,7 +39,9 @@ export function AlertLog({ logs }: AlertLogProps) {
                     <span className="hidden sm:inline">{format(new Date(log.recorded_at), 'dd/MM/yyyy ')}</span>
                     {format(new Date(log.recorded_at), 'HH:mm')}
                   </td>
-                  <td className="px-4 sm:px-6 py-3 sm:py-4 text-zinc-900 dark:text-zinc-300 font-medium whitespace-nowrap">{log.sensor_name}</td>
+                  <td className="px-4 sm:px-6 py-3 sm:py-4 text-zinc-900 dark:text-zinc-300 font-medium whitespace-nowrap">
+                    {sensorNames[log.sensor_id] || log.sensor_name}
+                  </td>
                   <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
                     <div className="flex items-center gap-2 sm:gap-3">
                       <span className={log.temperature > 30 ? 'text-red-600 dark:text-red-400 font-medium' : 'text-zinc-500 dark:text-zinc-500'}>

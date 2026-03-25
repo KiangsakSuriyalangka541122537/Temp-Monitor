@@ -347,6 +347,7 @@ export default function App() {
           <div className="h-auto lg:h-full">
             <SensorChart 
               data={chartData} 
+              sensorNames={sensorNames}
               timeRange={timeRange} 
               onTimeRangeChange={setTimeRange} 
               theme={theme}
@@ -356,7 +357,7 @@ export default function App() {
 
         {/* ALERT LOG (FULL WIDTH BELOW) */}
         <div className="w-full h-auto lg:h-[450px] overflow-hidden">
-          <AlertLog logs={alertLogs} />
+          <AlertLog logs={alertLogs} sensorNames={sensorNames} />
         </div>
 
       </div>
