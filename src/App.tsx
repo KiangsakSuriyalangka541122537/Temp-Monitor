@@ -54,16 +54,19 @@ export default function App() {
 
         if (latest && latest.length > 0) {
           setIsConnected(true);
-          const log = latest[0];
-          const mappedLog: SensorLog = {
-            id: log.id || Date.now(),
-            sensor_id: 1,
-            sensor_name: 'เซนเซอร์หลัก',
-            temperature: log.temperature,
-            humidity: log.humidity,
-            recorded_at: log.created_at
-          };
-          setLatestData({ 1: mappedLog });
+          const newLatestData: Record<number, SensorLog> = {};
+          latest.forEach((log: any) => {
+            const sId = log.sensor_id || 1;
+            newLatestData[sId] = {
+              id: log.id || Date.now(),
+              sensor_id: sId,
+              sensor_name: log.sensor_name || `เซนเซอร์ ${sId}`,
+              temperature: log.temperature,
+              humidity: log.humidity,
+              recorded_at: log.created_at
+            };
+          });
+          setLatestData(newLatestData);
           setLastUpdated(new Date());
         }
 
@@ -72,13 +75,13 @@ export default function App() {
           .from('Temp-sketch_mar24a')
           .select('*')
           .order('created_at', { ascending: false })
-          .limit(100);
+          .limit(200); // เพิ่ม limit เพื่อรองรับหลายเซนเซอร์
 
         if (!historyError && history) {
           const mappedHistory: SensorLog[] = history.map((log: any, index: number) => ({
             id: log.id || index,
-            sensor_id: 1,
-            sensor_name: 'เซนเซอร์หลัก',
+            sensor_id: log.sensor_id || 1,
+            sensor_name: log.sensor_name || `เซนเซอร์ ${log.sensor_id || 1}`,
             temperature: log.temperature,
             humidity: log.humidity,
             recorded_at: log.created_at
@@ -118,10 +121,11 @@ export default function App() {
         { event: 'INSERT', schema: 'public', table: 'Temp-sketch_mar24a' },
         (payload) => {
           const newLog = payload.new;
+          const sId = newLog.sensor_id || 1;
           const mappedLog: SensorLog = {
             id: newLog.id || Date.now(),
-            sensor_id: 1,
-            sensor_name: 'เซนเซอร์หลัก',
+            sensor_id: sId,
+            sensor_name: newLog.sensor_name || `เซนเซอร์ ${sId}`,
             temperature: newLog.temperature,
             humidity: newLog.humidity,
             recorded_at: newLog.created_at

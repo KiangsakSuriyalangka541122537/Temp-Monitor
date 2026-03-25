@@ -42,36 +42,68 @@ export function SensorChart({ data, timeRange, onTimeRangeChange, theme }: Senso
     // Sort data by time
     const sortedData = [...data].sort((a, b) => new Date(a.recorded_at).getTime() - new Date(b.recorded_at).getTime());
     
-    const labels = sortedData.map(log => format(new Date(log.recorded_at), 'HH:mm:ss'));
+    // Get unique timestamps for labels
+    const timestamps = Array.from(new Set(sortedData.map(log => format(new Date(log.recorded_at), 'HH:mm:ss'))));
+    
+    // Group data by sensor
+    const sensors = Array.from(new Set(sortedData.map(log => log.sensor_id)));
+    
+    const datasets: any[] = [];
+    const colors = [
+      { temp: '#ef4444', humid: '#3b82f6' }, // Sensor 1: Red, Blue
+      { temp: '#f97316', humid: '#06b6d4' }, // Sensor 2: Orange, Cyan
+      { temp: '#8b5cf6', humid: '#10b981' }, // Sensor 3: Violet, Emerald
+      { temp: '#ec4899', humid: '#eab308' }, // Sensor 4: Pink, Yellow
+    ];
+
+    sensors.forEach((sId, index) => {
+      const sensorData = sortedData.filter(log => log.sensor_id === sId);
+      const sensorName = sensorData[0]?.sensor_name || `เซนเซอร์ ${sId}`;
+      const colorSet = colors[index % colors.length];
+
+      // Map data to the global timestamps to ensure alignment
+      const tempData = timestamps.map(ts => {
+        const log = sensorData.find(l => format(new Date(l.recorded_at), 'HH:mm:ss') === ts);
+        return log ? log.temperature : null;
+      });
+
+      const humidData = timestamps.map(ts => {
+        const log = sensorData.find(l => format(new Date(l.recorded_at), 'HH:mm:ss') === ts);
+        return log ? log.humidity : null;
+      });
+
+      datasets.push({
+        label: `${sensorName} - อุณหภูมิ (°C)`,
+        data: tempData,
+        borderColor: colorSet.temp,
+        backgroundColor: `${colorSet.temp}1a`,
+        fill: false,
+        tension: 0.4,
+        pointRadius: 0,
+        pointHoverRadius: 4,
+        borderWidth: 2,
+        yAxisID: 'y-temp',
+        spanGaps: true,
+      });
+
+      datasets.push({
+        label: `${sensorName} - ความชื้น (%)`,
+        data: humidData,
+        borderColor: colorSet.humid,
+        backgroundColor: `${colorSet.humid}1a`,
+        fill: false,
+        tension: 0.4,
+        pointRadius: 0,
+        pointHoverRadius: 4,
+        borderWidth: 2,
+        yAxisID: 'y-humidity',
+        spanGaps: true,
+      });
+    });
     
     return {
-      labels,
-      datasets: [
-        {
-          label: 'อุณหภูมิ (°C)',
-          data: sortedData.map(log => log.temperature),
-          borderColor: '#ef4444', // red-500
-          backgroundColor: 'rgba(239, 68, 68, 0.1)',
-          fill: true,
-          tension: 0.4,
-          pointRadius: 0,
-          pointHoverRadius: 4,
-          borderWidth: 2,
-          yAxisID: 'y-temp',
-        },
-        {
-          label: 'ความชื้น (%)',
-          data: sortedData.map(log => log.humidity),
-          borderColor: '#3b82f6', // blue-500
-          backgroundColor: 'rgba(59, 130, 246, 0.1)',
-          fill: true,
-          tension: 0.4,
-          pointRadius: 0,
-          pointHoverRadius: 4,
-          borderWidth: 2,
-          yAxisID: 'y-humidity',
-        }
-      ]
+      labels: timestamps,
+      datasets
     };
   }, [data]);
 
