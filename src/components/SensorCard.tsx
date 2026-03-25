@@ -13,7 +13,7 @@ interface SensorCardProps {
   data: SensorLog | null;
   sensorName: string;
   onNameChange?: (newName: string) => void;
-  thresholds: { temp: number; humid: number };
+  thresholds: { tempMin: number; tempMax: number; humidMin: number; humidMax: number };
 }
 
 export function SensorCard({ data, sensorName, onNameChange, thresholds }: SensorCardProps) {
