@@ -5,7 +5,7 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { format } from 'date-fns';
-import { Sun, Moon, CheckCircle2, AlertTriangle, Activity } from 'lucide-react';
+import { Sun, Moon, CheckCircle2, AlertTriangle, Activity, Settings, X } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import { SensorCard } from './components/SensorCard';
 import { SensorChart } from './components/SensorChart';
@@ -33,6 +33,54 @@ export default function App() {
   const [timeRange, setTimeRange] = useState<'realtime' | '24h' | '7d' | '30d'>('realtime');
   const [isConnected, setIsConnected] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
+  const [showSettings, setShowSettings] = useState(false);
+  const [settings, setSettings] = useState({
+    temp_min: 18.0,
+    temp_max: 30.0,
+    humid_min: 30.0,
+    humid_max: 80.0,
+    notify_interval: 10
+  });
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+
+  // ดึงค่าตั้งค่าจาก Supabase
+  const fetchSettings = async () => {
+    const { data, error } = await supabase
+      .from('device_settings')
+      .select('*')
+      .eq('id', 1)
+      .single();
+    
+    if (!error && data) {
+      setSettings({
+        temp_min: data.temp_min,
+        temp_max: data.temp_max,
+        humid_min: data.humid_min,
+        humid_max: data.humid_max,
+        notify_interval: data.notify_interval
+      });
+    }
+  };
+
+  const saveSettings = async () => {
+    setIsSavingSettings(true);
+    const { error } = await supabase
+      .from('device_settings')
+      .update({
+        temp_min: settings.temp_min,
+        temp_max: settings.temp_max,
+        humid_min: settings.humid_min,
+        humid_max: settings.humid_max,
+        notify_interval: settings.notify_interval,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', 1);
+    
+    if (!error) {
+      setShowSettings(false);
+    }
+    setIsSavingSettings(false);
+  };
 
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
@@ -123,12 +171,12 @@ export default function App() {
           
           // กรองข้อมูลที่ผิดปกติมาแสดงใน Alert Log
           const alerts = mappedHistory
-            .filter(log => log.temperature > 30 || log.humidity > 80)
+            .filter(log => log.temperature > settings.temp_max || log.humidity > settings.humid_max)
             .map(log => ({
               ...log,
-              status: log.temperature > 30 && log.humidity > 80 
+              status: log.temperature > settings.temp_max && log.humidity > settings.humid_max 
                 ? 'both_high' 
-                : log.temperature > 30 
+                : log.temperature > settings.temp_max 
                   ? 'temperature_high' 
                   : 'humidity_high'
             } as AlertLogType))
@@ -192,12 +240,12 @@ export default function App() {
 
           // ตรวจสอบและเพิ่ม Alert ถ้าค่าผิดปกติ
           [log1, log2].forEach(log => {
-            if (log.temperature > 30 || log.humidity > 80) {
+            if (log.temperature > settings.temp_max || log.humidity > settings.humid_max) {
               const newAlert: AlertLogType = {
                 ...log,
-                status: log.temperature > 30 && log.humidity > 80 
+                status: log.temperature > settings.temp_max && log.humidity > settings.humid_max 
                   ? 'both_high' 
-                  : log.temperature > 30 
+                  : log.temperature > settings.temp_max 
                     ? 'temperature_high' 
                     : 'humidity_high'
               };
@@ -226,8 +274,16 @@ export default function App() {
 
     if (isOffline) return 'offline';
     
-    const hasCritical = sensors.some(s => s.temperature > 30 && s.humidity > 80);
-    const hasWarning = sensors.some(s => s.temperature > 30 || s.humidity > 80);
+    const isCritical = (s: SensorLog) => 
+      (s.temperature > settings.temp_max || s.temperature < settings.temp_min) && 
+      (s.humidity > settings.humid_max || s.humidity < settings.humid_min);
+    
+    const isWarning = (s: SensorLog) => 
+      s.temperature > settings.temp_max || s.temperature < settings.temp_min || 
+      s.humidity > settings.humid_max || s.humidity < settings.humid_min;
+
+    const hasCritical = sensors.some(isCritical);
+    const hasWarning = sensors.some(isWarning);
     
     if (hasCritical) return 'critical';
     if (hasWarning) return 'warning';
@@ -276,6 +332,14 @@ export default function App() {
                 </span>
               </div>
             </div>
+
+            <button
+              onClick={() => setShowSettings(true)}
+              className="p-2.5 sm:p-3 rounded-xl sm:rounded-2xl bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800/80 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors shadow-sm"
+              title="ตั้งค่าเกณฑ์การแจ้งเตือน"
+            >
+              <Settings className="w-4 h-4 sm:w-5 sm:h-5" />
+            </button>
 
             <button
               onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
@@ -336,6 +400,12 @@ export default function App() {
                 data={data} 
                 sensorName={sensorNames[data.sensor_id] || data.sensor_name} 
                 onNameChange={(newName) => handleNameChange(data.sensor_id, newName)}
+                thresholds={{ 
+                  tempMin: settings.temp_min, 
+                  tempMax: settings.temp_max, 
+                  humidMin: settings.humid_min, 
+                  humidMax: settings.humid_max 
+                }}
               />
             </div>
           ))}
@@ -357,8 +427,105 @@ export default function App() {
 
         {/* ALERT LOG (FULL WIDTH BELOW) */}
         <div className="w-full h-auto lg:h-[450px] overflow-hidden">
-          <AlertLog logs={alertLogs} sensorNames={sensorNames} />
+          <AlertLog 
+            logs={alertLogs} 
+            sensorNames={sensorNames} 
+            thresholds={{ 
+              tempMin: settings.temp_min, 
+              tempMax: settings.temp_max, 
+              humidMin: settings.humid_min, 
+              humidMax: settings.humid_max 
+            }} 
+          />
         </div>
+
+        {/* SETTINGS MODAL */}
+        {showSettings && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl">
+              <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center">
+                <h2 className="text-xl font-semibold flex items-center gap-2">
+                  <Settings className="w-5 h-5" />
+                  ตั้งค่าเกณฑ์การแจ้งเตือน
+                </h2>
+                <button onClick={() => setShowSettings(false)} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200">
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+              
+              <div className="p-6 space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-zinc-500 uppercase tracking-wider">อุณหภูมิต่ำสุด (°C)</label>
+                    <input 
+                      type="number" 
+                      value={settings.temp_min} 
+                      onChange={(e) => setSettings({...settings, temp_min: parseFloat(e.target.value)})}
+                      className="w-full bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 rounded-xl p-3 outline-none focus:ring-2 focus:ring-blue-500/50"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-zinc-500 uppercase tracking-wider">อุณหภูมิสูงสุด (°C)</label>
+                    <input 
+                      type="number" 
+                      value={settings.temp_max} 
+                      onChange={(e) => setSettings({...settings, temp_max: parseFloat(e.target.value)})}
+                      className="w-full bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 rounded-xl p-3 outline-none focus:ring-2 focus:ring-red-500/50"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-zinc-500 uppercase tracking-wider">ความชื้นต่ำสุด (%)</label>
+                    <input 
+                      type="number" 
+                      value={settings.humid_min} 
+                      onChange={(e) => setSettings({...settings, humid_min: parseFloat(e.target.value)})}
+                      className="w-full bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 rounded-xl p-3 outline-none focus:ring-2 focus:ring-blue-500/50"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-zinc-500 uppercase tracking-wider">ความชื้นสูงสุด (%)</label>
+                    <input 
+                      type="number" 
+                      value={settings.humid_max} 
+                      onChange={(e) => setSettings({...settings, humid_max: parseFloat(e.target.value)})}
+                      className="w-full bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 rounded-xl p-3 outline-none focus:ring-2 focus:ring-red-500/50"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-zinc-500 uppercase tracking-wider">ระยะเวลาแจ้งเตือนซ้ำ (นาที)</label>
+                  <input 
+                    type="number" 
+                    value={settings.notify_interval} 
+                    onChange={(e) => setSettings({...settings, notify_interval: parseInt(e.target.value)})}
+                    className="w-full bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 rounded-xl p-3 outline-none focus:ring-2 focus:ring-zinc-500/50"
+                  />
+                  <p className="text-xs text-zinc-400">ระยะเวลาขั้นต่ำก่อนจะส่ง LINE แจ้งเตือนซ้ำอีกครั้ง</p>
+                </div>
+              </div>
+
+              <div className="p-6 bg-zinc-50 dark:bg-zinc-800/50 flex gap-3">
+                <button 
+                  onClick={() => setShowSettings(false)}
+                  className="flex-1 py-3 rounded-xl font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors"
+                >
+                  ยกเลิก
+                </button>
+                <button 
+                  onClick={saveSettings}
+                  disabled={isSavingSettings}
+                  className="flex-1 py-3 rounded-xl font-medium bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 hover:opacity-90 transition-opacity disabled:opacity-50"
+                >
+                  {isSavingSettings ? 'กำลังบันทึก...' : 'บันทึกการตั้งค่า'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
       </div>
     </div>
