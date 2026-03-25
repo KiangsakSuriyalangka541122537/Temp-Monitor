@@ -21,6 +21,8 @@ export default function App() {
   const [isConnected, setIsConnected] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
 
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+
   // จัดการการเปลี่ยน Theme
   useEffect(() => {
     if (theme === 'dark') {
@@ -39,7 +41,7 @@ export default function App() {
   // ดึงข้อมูลและตั้งค่า Realtime Subscription
   useEffect(() => {
     // ฟังก์ชันสำหรับดึงข้อมูลเริ่มต้น
-    const fetchInitialData = async () => {
+    const fetchData = async () => {
       try {
         // ดึงข้อมูลล่าสุดจากตาราง Temp-sketch_mar24a
         const { data: latest, error: latestError } = await supabase
@@ -62,6 +64,7 @@ export default function App() {
             recorded_at: log.created_at
           };
           setLatestData({ 1: mappedLog });
+          setLastUpdated(new Date());
         }
 
         // ดึงข้อมูลสำหรับกราฟ (100 รายการล่าสุด)
@@ -102,7 +105,10 @@ export default function App() {
       }
     };
 
-    fetchInitialData();
+    fetchData();
+
+    // ตั้งค่า Polling เป็น fallback (ทุกๆ 15 วินาที)
+    const pollInterval = setInterval(fetchData, 15000);
 
     // ตั้งค่า Supabase Realtime Subscription
     const subscription = supabase
@@ -126,6 +132,7 @@ export default function App() {
             ...prev,
             [mappedLog.sensor_id]: mappedLog
           }));
+          setLastUpdated(new Date());
 
           // อัพเดทข้อมูลกราฟ
           setChartData(prev => {
@@ -152,6 +159,7 @@ export default function App() {
       .subscribe();
 
     return () => {
+      clearInterval(pollInterval);
       subscription.unsubscribe();
     };
   }, []);
@@ -214,7 +222,7 @@ export default function App() {
                   {format(currentTime, 'HH:mm:ss')}
                 </span>
                 <span className="text-[8px] sm:text-[10px] text-zinc-500 uppercase tracking-wider mt-1 leading-none">
-                  {format(currentTime, 'dd MMM yyyy')}
+                  อัปเดตล่าสุด: {format(lastUpdated, 'HH:mm:ss')}
                 </span>
               </div>
             </div>
