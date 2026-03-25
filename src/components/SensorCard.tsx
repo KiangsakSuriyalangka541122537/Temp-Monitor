@@ -1,5 +1,5 @@
-import React from 'react';
-import { TriangleAlert, Droplets, CheckCircle2, Activity } from 'lucide-react';
+import React, { useState } from 'react';
+import { TriangleAlert, Droplets, CheckCircle2, Activity, Pencil, Check, X } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { SensorLog } from '../types';
@@ -12,9 +12,25 @@ function cn(...inputs: ClassValue[]) {
 interface SensorCardProps {
   data: SensorLog | null;
   sensorName: string;
+  onNameChange?: (newName: string) => void;
 }
 
-export function SensorCard({ data, sensorName }: SensorCardProps) {
+export function SensorCard({ data, sensorName, onNameChange }: SensorCardProps) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [tempName, setTempName] = useState(sensorName);
+
+  const handleSave = () => {
+    if (onNameChange && tempName.trim()) {
+      onNameChange(tempName.trim());
+    }
+    setIsEditing(false);
+  };
+
+  const handleCancel = () => {
+    setTempName(sensorName);
+    setIsEditing(false);
+  };
+
   // ถ้ายังไม่มีข้อมูล ให้แสดงสถานะกำลังโหลด
   if (!data) {
     return (
@@ -47,16 +63,49 @@ export function SensorCard({ data, sensorName }: SensorCardProps) {
           : "bg-white dark:bg-zinc-900/40 border-zinc-200 dark:border-zinc-800/80 hover:border-zinc-300 dark:hover:border-zinc-700"
       )}
     >
-      <div className="flex justify-between items-center mb-1 sm:mb-2">
-        <h3 className="text-zinc-500 dark:text-zinc-400 font-medium text-[9px] sm:text-[11px]">
-          {sensorName} {isOffline && <span className="text-zinc-400 ml-1">(Offline)</span>}
-        </h3>
-        <div className="flex gap-1">
-          {isOffline && <Activity className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-zinc-400 animate-pulse" />}
-          {isNormal && <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-500" />}
-          {!isOffline && isTempHigh && <TriangleAlert className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-500" />}
-          {!isOffline && isHumidHigh && <Droplets className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-orange-500" />}
-        </div>
+      <div className="flex justify-between items-center mb-1 sm:mb-2 group">
+        {isEditing ? (
+          <div className="flex items-center gap-1 w-full">
+            <input
+              type="text"
+              value={tempName}
+              onChange={(e) => setTempName(e.target.value)}
+              className="bg-zinc-100 dark:bg-zinc-800 border-none rounded px-1.5 py-0.5 text-[10px] sm:text-xs w-full focus:ring-1 focus:ring-zinc-400 outline-none"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleSave();
+                if (e.key === 'Escape') handleCancel();
+              }}
+            />
+            <button onClick={handleSave} className="text-emerald-500 hover:text-emerald-600">
+              <Check className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+            </button>
+            <button onClick={handleCancel} className="text-red-500 hover:text-red-600">
+              <X className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5 overflow-hidden">
+            <h3 className="text-zinc-500 dark:text-zinc-400 font-medium text-[9px] sm:text-[11px] truncate">
+              {sensorName} {isOffline && <span className="text-zinc-400 ml-1">(Offline)</span>}
+            </h3>
+            <button 
+              onClick={() => setIsEditing(true)}
+              className="opacity-0 group-hover:opacity-100 transition-opacity text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+            >
+              <Pencil className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+            </button>
+          </div>
+        )}
+        
+        {!isEditing && (
+          <div className="flex gap-1 shrink-0">
+            {isOffline && <Activity className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-zinc-400 animate-pulse" />}
+            {isNormal && <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-500" />}
+            {!isOffline && isTempHigh && <TriangleAlert className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-500" />}
+            {!isOffline && isHumidHigh && <Droplets className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-orange-500" />}
+          </div>
+        )}
       </div>
 
       <div className="flex items-baseline gap-1 mb-1 sm:mb-2">

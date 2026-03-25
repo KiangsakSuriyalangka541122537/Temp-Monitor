@@ -17,6 +17,19 @@ export default function App() {
   const [latestData, setLatestData] = useState<Record<number, SensorLog>>({});
   const [chartData, setChartData] = useState<SensorLog[]>([]);
   const [alertLogs, setAlertLogs] = useState<AlertLogType[]>([]);
+  const [sensorNames, setSensorNames] = useState<Record<number, string>>(() => {
+    const saved = localStorage.getItem('sensorNames');
+    return saved ? JSON.parse(saved) : { 1: 'เซนเซอร์ 1', 2: 'เซนเซอร์ 2' };
+  });
+
+  // บันทึกชื่อเซนเซอร์ลง localStorage เมื่อมีการเปลี่ยนแปลง
+  useEffect(() => {
+    localStorage.setItem('sensorNames', JSON.stringify(sensorNames));
+  }, [sensorNames]);
+
+  const handleNameChange = (id: number, newName: string) => {
+    setSensorNames(prev => ({ ...prev, [id]: newName }));
+  };
   const [timeRange, setTimeRange] = useState<'realtime' | '24h' | '7d' | '30d'>('realtime');
   const [isConnected, setIsConnected] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
@@ -59,7 +72,7 @@ export default function App() {
             1: {
               id: log.id,
               sensor_id: 1,
-              sensor_name: 'เซนเซอร์ 1',
+              sensor_name: sensorNames[1] || 'เซนเซอร์ 1',
               temperature: log.t1 || 0,
               humidity: log.h1 || 0,
               recorded_at: log.created_at
@@ -67,7 +80,7 @@ export default function App() {
             2: {
               id: log.id,
               sensor_id: 2,
-              sensor_name: 'เซนเซอร์ 2',
+              sensor_name: sensorNames[2] || 'เซนเซอร์ 2',
               temperature: log.t2 || 0,
               humidity: log.h2 || 0,
               recorded_at: log.created_at
@@ -91,7 +104,7 @@ export default function App() {
             mappedHistory.push({
               id: log.id * 2, // สร้าง id จำลองให้ไม่ซ้ำ
               sensor_id: 1,
-              sensor_name: 'เซนเซอร์ 1',
+              sensor_name: sensorNames[1] || 'เซนเซอร์ 1',
               temperature: log.t1 || 0,
               humidity: log.h1 || 0,
               recorded_at: log.created_at
@@ -100,7 +113,7 @@ export default function App() {
             mappedHistory.push({
               id: log.id * 2 + 1,
               sensor_id: 2,
-              sensor_name: 'เซนเซอร์ 2',
+              sensor_name: sensorNames[2] || 'เซนเซอร์ 2',
               temperature: log.t2 || 0,
               humidity: log.h2 || 0,
               recorded_at: log.created_at
@@ -146,7 +159,7 @@ export default function App() {
           const log1: SensorLog = {
             id: newLog.id * 2,
             sensor_id: 1,
-            sensor_name: 'เซนเซอร์ 1',
+            sensor_name: sensorNames[1] || 'เซนเซอร์ 1',
             temperature: newLog.t1 || 0,
             humidity: newLog.h1 || 0,
             recorded_at: newLog.created_at
@@ -156,7 +169,7 @@ export default function App() {
           const log2: SensorLog = {
             id: newLog.id * 2 + 1,
             sensor_id: 2,
-            sensor_name: 'เซนเซอร์ 2',
+            sensor_name: sensorNames[2] || 'เซนเซอร์ 2',
             temperature: newLog.t2 || 0,
             humidity: newLog.h2 || 0,
             recorded_at: newLog.created_at
@@ -319,7 +332,11 @@ export default function App() {
         }`}>
           {(Object.entries(latestData) as [string, SensorLog][]).map(([id, data]) => (
             <div key={id}>
-              <SensorCard data={data} sensorName={data.sensor_name} />
+              <SensorCard 
+                data={data} 
+                sensorName={sensorNames[data.sensor_id] || data.sensor_name} 
+                onNameChange={(newName) => handleNameChange(data.sensor_id, newName)}
+              />
             </div>
           ))}
         </div>
