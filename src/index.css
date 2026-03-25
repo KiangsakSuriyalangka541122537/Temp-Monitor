@@ -51,4 +51,32 @@
   .dark ::-webkit-scrollbar-thumb:hover {
     background: #52525b; /* zinc-600 */
   }
+
+  /* Cute and Rounded Date/Time Inputs */
+  input[type="date"],
+  input[type="time"] {
+    position: relative;
+    cursor: pointer;
+  }
+
+  input[type="date"]::-webkit-calendar-picker-indicator,
+  input[type="time"]::-webkit-calendar-picker-indicator {
+    background: transparent;
+    bottom: 0;
+    color: transparent;
+    cursor: pointer;
+    height: auto;
+    left: 0;
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: auto;
+  }
+
+  /* Custom styling for the inputs themselves */
+  .cute-input {
+    @apply transition-all duration-300 ease-in-out;
+    @apply hover:bg-zinc-100/50 dark:hover:bg-zinc-800/50;
+    @apply focus:ring-4 focus:ring-zinc-500/10;
+  }
 }

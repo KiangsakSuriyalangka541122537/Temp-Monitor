@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -27,19 +27,49 @@ ChartJS.register(
   Filler
 );
 
+import { Calendar, Clock, ChevronDown, ArrowRight } from 'lucide-react';
+
 interface SensorChartProps {
   data: SensorLog[];
   sensorNames: Record<number, string>;
-  timeRange: 'realtime' | '24h' | '7d' | '30d';
-  onTimeRangeChange: (range: 'realtime' | '24h' | '7d' | '30d') => void;
+  timeRange: 'realtime' | '24h' | '7d' | '30d' | 'custom';
+  onTimeRangeChange: (range: 'realtime' | '24h' | '7d' | '30d' | 'custom') => void;
+  customFilter: {
+    startDate: string;
+    endDate: string;
+    startTime: string;
+    endTime: string;
+  };
+  onCustomFilterChange: (filter: {
+    startDate: string;
+    endDate: string;
+    startTime: string;
+    endTime: string;
+  }) => void;
   theme: 'light' | 'dark';
 }
 
-export function SensorChart({ data, sensorNames, timeRange, onTimeRangeChange, theme }: SensorChartProps) {
+export function SensorChart({ 
+  data, 
+  sensorNames, 
+  timeRange, 
+  onTimeRangeChange, 
+  customFilter,
+  onCustomFilterChange,
+  theme 
+}: SensorChartProps) {
   const isDark = theme === 'dark';
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 640);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Prepare Chart.js data
-  const chartData = React.useMemo(() => {
+  const chartData = useMemo(() => {
     // Sort data by time
     const sortedData = [...data].sort((a, b) => new Date(a.recorded_at).getTime() - new Date(b.recorded_at).getTime());
     
@@ -108,6 +138,22 @@ export function SensorChart({ data, sensorNames, timeRange, onTimeRangeChange, t
     };
   }, [data]);
 
+  // Get sensors for custom legend
+  const sensorsList = useMemo(() => {
+    const sIds = Array.from(new Set(data.map(log => log.sensor_id)));
+    const colors = [
+      { temp: '#ef4444', humid: '#3b82f6' }, // Sensor 1: Red, Blue
+      { temp: '#f97316', humid: '#06b6d4' }, // Sensor 2: Orange, Cyan
+      { temp: '#8b5cf6', humid: '#10b981' }, // Sensor 3: Violet, Emerald
+      { temp: '#ec4899', humid: '#eab308' }, // Sensor 4: Pink, Yellow
+    ];
+    return sIds.map((id, index) => ({
+      id,
+      name: sensorNames[id] || `เซนเซอร์ ${id}`,
+      colors: colors[index % colors.length]
+    }));
+  }, [data, sensorNames]);
+
   const options: ChartOptions<'line'> = {
     responsive: true,
     maintainAspectRatio: false,
@@ -117,6 +163,7 @@ export function SensorChart({ data, sensorNames, timeRange, onTimeRangeChange, t
     },
     plugins: {
       legend: {
+        display: !isMobile,
         position: 'top' as const,
         align: 'end' as const,
         labels: {
@@ -227,7 +274,7 @@ export function SensorChart({ data, sensorNames, timeRange, onTimeRangeChange, t
           
           <div className="flex bg-zinc-100 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800/80 rounded-xl p-1 shadow-inner w-full sm:w-auto overflow-x-auto no-scrollbar">
             <div className="flex min-w-max">
-              {(['realtime', '24h', '7d', '30d'] as const).map((range) => (
+              {(['realtime', '24h', '7d', '30d', 'custom'] as const).map((range) => (
                 <button
                   key={range}
                   onClick={() => onTimeRangeChange(range)}
@@ -237,18 +284,92 @@ export function SensorChart({ data, sensorNames, timeRange, onTimeRangeChange, t
                       : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-200/50 dark:hover:bg-zinc-800/50'
                   }`}
                 >
-                  {range === 'realtime' ? 'Real-time' : range === '24h' ? '24 ชั่วโมง' : range === '7d' ? '7 วัน' : '30 วัน'}
+                  {range === 'realtime' ? 'Real-time' : range === '24h' ? '24 ชั่วโมง' : range === '7d' ? '7 วัน' : range === '30d' ? '30 วัน' : 'กำหนดเอง'}
                 </button>
               ))}
             </div>
           </div>
         </div>
+
+        {/* Custom Filter UI */}
+        {timeRange === 'custom' && (
+          <div className="flex flex-col sm:flex-row gap-4 mt-4 p-4 bg-zinc-50 dark:bg-zinc-900/40 rounded-2xl border border-zinc-100 dark:border-zinc-800/50 animate-in fade-in slide-in-from-top-2 duration-300">
+            {/* Date Range Group */}
+            <div className="flex-1 flex flex-col gap-2">
+              <label className="text-[10px] uppercase tracking-wider font-bold text-zinc-400 dark:text-zinc-500 flex items-center gap-2 px-2">
+                <Calendar className="w-3.5 h-3.5" /> ช่วงวันที่
+              </label>
+              <div className="flex items-center gap-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-[24px] p-1.5 shadow-sm focus-within:ring-4 focus-within:ring-zinc-500/10 transition-all duration-300">
+                <input
+                  type="date"
+                  value={customFilter.startDate}
+                  onChange={(e) => onCustomFilterChange({ ...customFilter, startDate: e.target.value })}
+                  className="flex-1 bg-transparent border-none px-3 py-2 text-xs sm:text-sm focus:outline-none dark:color-scheme-dark cute-input rounded-full"
+                />
+                <div className="w-8 h-8 flex items-center justify-center bg-zinc-50 dark:bg-zinc-800 rounded-full shrink-0">
+                  <ArrowRight className="w-4 h-4 text-zinc-400 dark:text-zinc-500" />
+                </div>
+                <input
+                  type="date"
+                  value={customFilter.endDate}
+                  onChange={(e) => onCustomFilterChange({ ...customFilter, endDate: e.target.value })}
+                  className="flex-1 bg-transparent border-none px-3 py-2 text-xs sm:text-sm focus:outline-none dark:color-scheme-dark cute-input rounded-full"
+                />
+              </div>
+            </div>
+
+            {/* Time Range Group */}
+            <div className="flex-1 flex flex-col gap-2">
+              <label className="text-[10px] uppercase tracking-wider font-bold text-zinc-400 dark:text-zinc-500 flex items-center gap-2 px-2">
+                <Clock className="w-3.5 h-3.5" /> ช่วงเวลา
+              </label>
+              <div className="flex items-center gap-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-[24px] p-1.5 shadow-sm focus-within:ring-4 focus-within:ring-zinc-500/10 transition-all duration-300">
+                <input
+                  type="time"
+                  value={customFilter.startTime}
+                  onChange={(e) => onCustomFilterChange({ ...customFilter, startTime: e.target.value })}
+                  className="flex-1 bg-transparent border-none px-3 py-2 text-xs sm:text-sm focus:outline-none dark:color-scheme-dark cute-input rounded-full"
+                />
+                <div className="w-8 h-8 flex items-center justify-center bg-zinc-50 dark:bg-zinc-800 rounded-full shrink-0">
+                  <ArrowRight className="w-4 h-4 text-zinc-400 dark:text-zinc-500" />
+                </div>
+                <input
+                  type="time"
+                  value={customFilter.endTime}
+                  onChange={(e) => onCustomFilterChange({ ...customFilter, endTime: e.target.value })}
+                  className="flex-1 bg-transparent border-none px-3 py-2 text-xs sm:text-sm focus:outline-none dark:color-scheme-dark cute-input rounded-full"
+                />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Chart Canvas Container */}
-      <div className="bg-white dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800/80 rounded-2xl sm:rounded-3xl p-4 sm:p-6 flex flex-col shadow-sm flex-1 lg:min-h-0">
-        <div className="flex-1 w-full min-h-[300px] lg:min-h-0">
+      <div className="bg-white dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800/80 rounded-2xl sm:rounded-3xl flex flex-col shadow-sm flex-1 lg:min-h-0 overflow-hidden">
+        <div className="flex-1 w-full min-h-[300px] lg:min-h-0 p-4 sm:p-6">
           <Line data={chartData} options={options} />
+        </div>
+
+        {/* Custom Legend - Mobile Only */}
+        <div className="sm:hidden grid grid-cols-2 gap-2 p-3 border-t border-zinc-100 dark:border-zinc-800/50 bg-zinc-50/50 dark:bg-zinc-900/20">
+          {sensorsList.map((sensor) => (
+            <div key={sensor.id} className="flex flex-col gap-1 p-2 bg-white dark:bg-zinc-900/40 rounded-xl border border-zinc-100 dark:border-zinc-800/50 shadow-sm">
+              <span className="text-[10px] font-bold text-zinc-900 dark:text-zinc-100 truncate">
+                {sensor.name}
+              </span>
+              <div className="grid grid-cols-1 gap-0.5">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: sensor.colors.temp }} />
+                  <span className="text-[9px] text-zinc-500 dark:text-zinc-400 whitespace-nowrap">อุณหภูมิ (°C)</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: sensor.colors.humid }} />
+                  <span className="text-[9px] text-zinc-500 dark:text-zinc-400 whitespace-nowrap">ความชื้น (%)</span>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>

@@ -32,7 +32,13 @@ export default function App() {
   const handleNameChange = (id: number, newName: string) => {
     setSensorNames(prev => ({ ...prev, [id]: newName }));
   };
-  const [timeRange, setTimeRange] = useState<'realtime' | '24h' | '7d' | '30d'>('realtime');
+  const [timeRange, setTimeRange] = useState<'realtime' | '24h' | '7d' | '30d' | 'custom'>('realtime');
+  const [customFilter, setCustomFilter] = useState({
+    startDate: format(new Date(), 'yyyy-MM-dd'),
+    endDate: format(new Date(), 'yyyy-MM-dd'),
+    startTime: '00:00',
+    endTime: '23:59'
+  });
   const [isConnected, setIsConnected] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
   const [showSettings, setShowSettings] = useState(false);
@@ -148,12 +154,32 @@ export default function App() {
           setLastUpdated(new Date());
         }
 
-        // ดึงข้อมูลสำหรับกราฟ (100 รายการล่าสุด)
-        const { data: history, error: historyError } = await supabase
+        // ดึงข้อมูลสำหรับกราฟและ Alert Log
+        let query = supabase
           .from('Temp-sketch_mar24a')
-          .select('*')
+          .select('*');
+
+        if (timeRange === 'custom') {
+          const start = `${customFilter.startDate}T${customFilter.startTime}:00`;
+          const end = `${customFilter.endDate}T${customFilter.endTime}:59`;
+          query = query.gte('created_at', start).lte('created_at', end);
+        } else if (timeRange === '24h') {
+          const yesterday = new Date();
+          yesterday.setHours(yesterday.getHours() - 24);
+          query = query.gte('created_at', yesterday.toISOString());
+        } else if (timeRange === '7d') {
+          const weekAgo = new Date();
+          weekAgo.setDate(weekAgo.getDate() - 7);
+          query = query.gte('created_at', weekAgo.toISOString());
+        } else if (timeRange === '30d') {
+          const monthAgo = new Date();
+          monthAgo.setDate(monthAgo.getDate() - 30);
+          query = query.gte('created_at', monthAgo.toISOString());
+        }
+
+        const { data: history, error: historyError } = await query
           .order('created_at', { ascending: false })
-          .limit(100);
+          .limit(timeRange === 'realtime' ? 100 : 1000);
 
         if (!historyError && history) {
           const mappedHistory: SensorLog[] = [];
@@ -181,12 +207,18 @@ export default function App() {
           
           // กรองข้อมูลที่ผิดปกติมาแสดงใน Alert Log
           const alerts = mappedHistory
-            .filter(log => log.temperature > settings.temp_max || log.humidity > settings.humid_max)
+            .filter(log => 
+              log.temperature > settings.temp_max || 
+              log.temperature < settings.temp_min || 
+              log.humidity > settings.humid_max || 
+              log.humidity < settings.humid_min
+            )
             .map(log => ({
               ...log,
-              status: log.temperature > settings.temp_max && log.humidity > settings.humid_max 
+              status: (log.temperature > settings.temp_max || log.temperature < settings.temp_min) && 
+                      (log.humidity > settings.humid_max || log.humidity < settings.humid_min)
                 ? 'both_high' 
-                : log.temperature > settings.temp_max 
+                : (log.temperature > settings.temp_max || log.temperature < settings.temp_min)
                   ? 'temperature_high' 
                   : 'humidity_high'
             } as AlertLogType))
@@ -430,6 +462,8 @@ export default function App() {
               sensorNames={sensorNames}
               timeRange={timeRange} 
               onTimeRangeChange={setTimeRange} 
+              customFilter={customFilter}
+              onCustomFilterChange={setCustomFilter}
               theme={theme}
             />
           </div>
@@ -446,6 +480,10 @@ export default function App() {
               humidMin: settings.humid_min, 
               humidMax: settings.humid_max 
             }} 
+            timeRange={timeRange}
+            customFilter={customFilter}
+            onCustomFilterChange={setCustomFilter}
+            onTimeRangeChange={setTimeRange}
           />
         </div>
 
