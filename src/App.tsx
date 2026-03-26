@@ -95,15 +95,29 @@ export default function App() {
       .single();
     
     if (!error && data) {
-      setSettings({
+      const newSettings = {
         temp_min: data.temp_min,
         temp_max: data.temp_max,
         humid_min: data.humid_min,
         humid_max: data.humid_max,
         notify_interval: data.notify_interval
+      };
+      
+      setSettings(prev => {
+        if (JSON.stringify(newSettings) !== JSON.stringify(prev)) {
+          return newSettings;
+        }
+        return prev;
       });
+
       if (data.sensor_names) {
-        setSensorNames(data.sensor_names);
+        // Only update if different to prevent re-render loops
+        setSensorNames(prev => {
+          if (JSON.stringify(data.sensor_names) !== JSON.stringify(prev)) {
+            return data.sensor_names;
+          }
+          return prev;
+        });
       }
     }
   }, []);

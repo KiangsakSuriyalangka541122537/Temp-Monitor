@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { format, startOfDay, endOfDay, startOfMonth, endOfMonth, startOfYear, endOfYear, subDays } from 'date-fns';
 import { FileText, Download, Calendar, Filter, ChevronLeft, ChevronRight, Search, AlertCircle, CheckCircle2, Activity } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -60,7 +60,8 @@ export function ReportPage({ sensorNames, thresholds, onBack }: ReportPageProps)
   };
 
   const fetchReportData = useCallback(async () => {
-    setIsLoading(true);
+    // Only show loading if we don't have data yet
+    setIsLoading(prev => prev || false); 
     try {
       let startDate: string;
       let endDate: string;
@@ -94,7 +95,7 @@ export function ReportPage({ sensorNames, thresholds, onBack }: ReportPageProps)
           mappedLogs.push({
             id: log.id * 2,
             sensor_id: 1,
-            sensor_name: sensorNames[1] || 'เซนเซอร์ 1',
+            sensor_name: '', // Will map later
             temperature: log.t1 || 0,
             humidity: log.h1 || 0,
             recorded_at: log.created_at
@@ -102,10 +103,10 @@ export function ReportPage({ sensorNames, thresholds, onBack }: ReportPageProps)
           mappedLogs.push({
             id: log.id * 2 + 1,
             sensor_id: 2,
-            sensor_name: sensorNames[2] || 'เซนเซอร์ 2',
+            sensor_name: '', // Will map later
             temperature: log.t2 || 0,
             humidity: log.h2 || 0,
-            recorded_at: log.created_at
+            recorded_at: log.recorded_at || log.created_at
           });
         });
         setLogs(mappedLogs);
@@ -115,29 +116,44 @@ export function ReportPage({ sensorNames, thresholds, onBack }: ReportPageProps)
     } finally {
       setIsLoading(false);
     }
-  }, [range, selectedDate, customRange, sensorNames]);
+  }, [range, selectedDate, customRange]);
 
   useEffect(() => {
     fetchReportData();
   }, [fetchReportData]);
 
-  const filteredLogs = logs.filter(log => {
-    const isNormal = log.temperature <= thresholds.tempMax && 
-                     log.temperature >= thresholds.tempMin && 
-                     log.humidity <= thresholds.humidMax && 
-                     log.humidity >= thresholds.humidMin;
-    
-    const matchesSearch = log.sensor_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         format(new Date(log.recorded_at), 'HH:mm:ss').includes(searchQuery);
-    
-    const matchesStatus = statusFilter === 'all' || 
-                         (statusFilter === 'normal' && isNormal) || 
-                         (statusFilter === 'abnormal' && !isNormal);
-    
-    return matchesSearch && matchesStatus;
-  });
+  // Clear logs when parameters change to force a clean loading state
+  useEffect(() => {
+    setLogs([]);
+    setIsLoading(true);
+  }, [range, selectedDate, customRange.start, customRange.end]);
 
-  const stats = {
+  const displayLogs = useMemo(() => {
+    return logs.map(log => ({
+      ...log,
+      sensor_name: sensorNames[log.sensor_id as keyof typeof sensorNames] || `เซนเซอร์ ${log.sensor_id}`
+    }));
+  }, [logs, sensorNames]);
+
+  const filteredLogs = useMemo(() => {
+    return displayLogs.filter(log => {
+      const isNormal = log.temperature <= thresholds.tempMax && 
+                       log.temperature >= thresholds.tempMin && 
+                       log.humidity <= thresholds.humidMax && 
+                       log.humidity >= thresholds.humidMin;
+      
+      const matchesSearch = log.sensor_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                           format(new Date(log.recorded_at), 'HH:mm:ss').includes(searchQuery);
+      
+      const matchesStatus = statusFilter === 'all' || 
+                           (statusFilter === 'normal' && isNormal) || 
+                           (statusFilter === 'abnormal' && !isNormal);
+      
+      return matchesSearch && matchesStatus;
+    });
+  }, [displayLogs, thresholds, searchQuery, statusFilter]);
+
+  const stats = useMemo(() => ({
     avgTemp: logs.length > 0 ? logs.reduce((acc, curr) => acc + curr.temperature, 0) / logs.length : 0,
     avgHumid: logs.length > 0 ? logs.reduce((acc, curr) => acc + curr.humidity, 0) / logs.length : 0,
     totalAlerts: logs.filter(log => 
@@ -146,7 +162,7 @@ export function ReportPage({ sensorNames, thresholds, onBack }: ReportPageProps)
       log.humidity > thresholds.humidMax || 
       log.humidity < thresholds.humidMin
     ).length
-  };
+  }), [logs, thresholds]);
 
   const exportPDF = async () => {
     setIsExporting(true);
@@ -492,7 +508,7 @@ export function ReportPage({ sensorNames, thresholds, onBack }: ReportPageProps)
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-              {isLoading && logs.length === 0 ? (
+              {isLoading ? (
                 <tr>
                   <td colSpan={5} className="px-6 py-12 text-center">
                     <div className="flex flex-col items-center gap-2">
@@ -501,7 +517,7 @@ export function ReportPage({ sensorNames, thresholds, onBack }: ReportPageProps)
                     </div>
                   </td>
                 </tr>
-              ) : !isLoading && filteredLogs.length === 0 ? (
+              ) : filteredLogs.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-6 py-12 text-center">
                     <div className="flex flex-col items-center gap-2">
