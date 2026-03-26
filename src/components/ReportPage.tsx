@@ -373,12 +373,12 @@ export function ReportPage({ sensorNames, thresholds, onBack }: ReportPageProps)
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         <div className="lg:col-span-6 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-4 sm:p-6 shadow-sm">
           <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-            <div className="flex p-1 bg-zinc-100 dark:bg-zinc-800 rounded-2xl w-full sm:w-auto overflow-x-auto">
+            <div className="flex p-1 bg-zinc-100 dark:bg-zinc-800 rounded-2xl w-full sm:w-auto overflow-x-auto no-scrollbar">
               {(['day', 'month', 'year', 'custom'] as ReportRange[]).map((r) => (
                 <button
                   key={r}
                   onClick={() => setRange(r)}
-                  className={`flex-1 sm:flex-none px-4 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${
+                  className={`flex-1 sm:flex-none min-w-max px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
                     range === r 
                       ? 'bg-white dark:bg-zinc-700 text-blue-600 dark:text-blue-400 shadow-sm' 
                       : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
@@ -429,12 +429,12 @@ export function ReportPage({ sensorNames, thresholds, onBack }: ReportPageProps)
         </div>
 
         <div className="lg:col-span-3 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-4 sm:p-6 shadow-sm">
-          <div className="flex p-1 bg-zinc-100 dark:bg-zinc-800 rounded-2xl w-full">
+          <div className="flex p-1 bg-zinc-100 dark:bg-zinc-800 rounded-2xl w-full overflow-x-auto no-scrollbar">
             {(['all', 'normal', 'abnormal'] as const).map((f) => (
               <button
                 key={f}
                 onClick={() => setStatusFilter(f)}
-                className={`flex-1 px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all ${
+                className={`flex-1 min-w-max px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap ${
                   statusFilter === f 
                     ? 'bg-white dark:bg-zinc-700 text-blue-600 dark:text-blue-400 shadow-sm' 
                     : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
@@ -586,12 +586,12 @@ export function ReportPage({ sensorNames, thresholds, onBack }: ReportPageProps)
                 {/* Range Selection */}
                 <div className="space-y-3">
                   <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">ช่วงเวลา</label>
-                  <div className="flex p-1 bg-zinc-100 dark:bg-zinc-800 rounded-2xl">
+                  <div className="flex p-1 bg-zinc-100 dark:bg-zinc-800 rounded-2xl overflow-x-auto no-scrollbar">
                     {(['day', 'month', 'year', 'custom'] as ReportRange[]).map((r) => (
                       <button
                         key={r}
                         onClick={() => setExportRange(r)}
-                        className={`flex-1 px-3 py-2 rounded-xl text-sm font-medium transition-all ${
+                        className={`flex-1 min-w-max px-3 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
                           exportRange === r 
                             ? 'bg-white dark:bg-zinc-700 text-blue-600 dark:text-blue-400 shadow-sm' 
                             : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
@@ -644,12 +644,12 @@ export function ReportPage({ sensorNames, thresholds, onBack }: ReportPageProps)
                 {/* Status Selection */}
                 <div className="space-y-3">
                   <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">สถานะ</label>
-                  <div className="flex p-1 bg-zinc-100 dark:bg-zinc-800 rounded-2xl">
+                  <div className="flex p-1 bg-zinc-100 dark:bg-zinc-800 rounded-2xl overflow-x-auto no-scrollbar">
                     {(['all', 'normal', 'abnormal'] as const).map((f) => (
                       <button
                         key={f}
                         onClick={() => setExportStatusFilter(f)}
-                        className={`flex-1 px-3 py-2 rounded-xl text-sm font-medium transition-all ${
+                        className={`flex-1 min-w-max px-3 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
                           exportStatusFilter === f 
                             ? 'bg-white dark:bg-zinc-700 text-blue-600 dark:text-blue-400 shadow-sm' 
                             : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'

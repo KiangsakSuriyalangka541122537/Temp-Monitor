@@ -422,7 +422,10 @@ export default function App() {
         
         {/* TOP NAVIGATION / HEADER */}
         <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-2 sm:mb-3 gap-4 sm:gap-6">
-          <div className="flex items-center gap-3 sm:gap-4 w-full sm:w-auto">
+          <div 
+            className="flex items-center gap-3 sm:gap-4 w-full sm:w-auto cursor-pointer hover:opacity-80 transition-opacity"
+            onClick={() => setView('dashboard')}
+          >
             <div className="w-10 h-10 sm:w-12 sm:h-12 bg-zinc-900 dark:bg-white rounded-xl sm:rounded-2xl flex items-center justify-center shadow-sm shrink-0">
               <Activity className="w-5 h-5 sm:w-6 sm:h-6 text-white dark:text-zinc-900" />
             </div>
