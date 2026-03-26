@@ -295,7 +295,10 @@ export default function App() {
     // ตั้งค่า Polling เป็น fallback (ทุกๆ 15 วินาที)
     const pollInterval = setInterval(() => {
       fetchData();
-      fetchSettings();
+      // ดึงค่าตั้งค่าเฉพาะเมื่อไม่ได้เปิดหน้าต่างตั้งค่าอยู่ เพื่อไม่ให้ทับค่าที่กำลังพิมพ์
+      if (!showSettings) {
+        fetchSettings();
+      }
     }, 15000);
 
     // ตั้งค่า Supabase Realtime Subscription สำหรับข้อมูลเซนเซอร์
@@ -378,14 +381,18 @@ export default function App() {
           console.log('Settings updated from cloud:', payload.new);
           const newData = payload.new;
           
-          // อัปเดตเกณฑ์การแจ้งเตือน
-          setSettings({
-            temp_min: newData.temp_min,
-            temp_max: newData.temp_max,
-            humid_min: newData.humid_min,
-            humid_max: newData.humid_max,
-            notify_interval: newData.notify_interval
-          });
+          // อัปเดตเกณฑ์การแจ้งเตือนเฉพาะเมื่อไม่ได้เปิดหน้าต่างตั้งค่าอยู่
+          if (!showSettings) {
+            setSettings({
+              temp_min: newData.temp_min,
+              temp_max: newData.temp_max,
+              humid_min: newData.humid_min,
+              humid_max: newData.humid_max,
+              notify_interval: newData.notify_interval,
+              line_access_token: newData.line_access_token || '',
+              line_user_id: newData.line_user_id || ''
+            });
+          }
           
           // อัปเดตชื่อเซนเซอร์ (ซิงค์ข้ามเครื่อง)
           if (newData.sensor_names) {
@@ -668,8 +675,11 @@ export default function App() {
                       <label className="text-sm font-medium text-zinc-500 uppercase tracking-wider">อุณหภูมิต่ำสุด (°C)</label>
                       <input 
                         type="number" 
-                        value={settings.temp_min} 
-                        onChange={(e) => setSettings({...settings, temp_min: parseFloat(e.target.value)})}
+                        value={isNaN(settings.temp_min) ? '' : settings.temp_min} 
+                        onChange={(e) => {
+                          const val = e.target.value === '' ? NaN : parseFloat(e.target.value);
+                          setSettings(prev => ({...prev, temp_min: val}));
+                        }}
                         className="w-full bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 rounded-xl p-3 outline-none focus:ring-2 focus:ring-blue-500/50"
                       />
                     </div>
@@ -677,8 +687,11 @@ export default function App() {
                       <label className="text-sm font-medium text-zinc-500 uppercase tracking-wider">อุณหภูมิสูงสุด (°C)</label>
                       <input 
                         type="number" 
-                        value={settings.temp_max} 
-                        onChange={(e) => setSettings({...settings, temp_max: parseFloat(e.target.value)})}
+                        value={isNaN(settings.temp_max) ? '' : settings.temp_max} 
+                        onChange={(e) => {
+                          const val = e.target.value === '' ? NaN : parseFloat(e.target.value);
+                          setSettings(prev => ({...prev, temp_max: val}));
+                        }}
                         className="w-full bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 rounded-xl p-3 outline-none focus:ring-2 focus:ring-red-500/50"
                       />
                     </div>
@@ -689,8 +702,11 @@ export default function App() {
                       <label className="text-sm font-medium text-zinc-500 uppercase tracking-wider">ความชื้นต่ำสุด (%)</label>
                       <input 
                         type="number" 
-                        value={settings.humid_min} 
-                        onChange={(e) => setSettings({...settings, humid_min: parseFloat(e.target.value)})}
+                        value={isNaN(settings.humid_min) ? '' : settings.humid_min} 
+                        onChange={(e) => {
+                          const val = e.target.value === '' ? NaN : parseFloat(e.target.value);
+                          setSettings(prev => ({...prev, humid_min: val}));
+                        }}
                         className="w-full bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 rounded-xl p-3 outline-none focus:ring-2 focus:ring-blue-500/50"
                       />
                     </div>
@@ -698,8 +714,11 @@ export default function App() {
                       <label className="text-sm font-medium text-zinc-500 uppercase tracking-wider">ความชื้นสูงสุด (%)</label>
                       <input 
                         type="number" 
-                        value={settings.humid_max} 
-                        onChange={(e) => setSettings({...settings, humid_max: parseFloat(e.target.value)})}
+                        value={isNaN(settings.humid_max) ? '' : settings.humid_max} 
+                        onChange={(e) => {
+                          const val = e.target.value === '' ? NaN : parseFloat(e.target.value);
+                          setSettings(prev => ({...prev, humid_max: val}));
+                        }}
                         className="w-full bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 rounded-xl p-3 outline-none focus:ring-2 focus:ring-red-500/50"
                       />
                     </div>
@@ -709,8 +728,11 @@ export default function App() {
                     <label className="text-sm font-medium text-zinc-500 uppercase tracking-wider">ระยะเวลาแจ้งเตือนซ้ำ (นาที)</label>
                     <input 
                       type="number" 
-                      value={settings.notify_interval} 
-                      onChange={(e) => setSettings({...settings, notify_interval: parseInt(e.target.value)})}
+                      value={isNaN(settings.notify_interval) ? '' : settings.notify_interval} 
+                      onChange={(e) => {
+                        const val = e.target.value === '' ? NaN : parseInt(e.target.value);
+                        setSettings(prev => ({...prev, notify_interval: val}));
+                      }}
                       className="w-full bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 rounded-xl p-3 outline-none focus:ring-2 focus:ring-zinc-500/50"
                     />
                     <p className="text-xs text-zinc-400">ระยะเวลาขั้นต่ำก่อนจะส่ง LINE แจ้งเตือนซ้ำอีกครั้ง</p>
@@ -755,7 +777,7 @@ export default function App() {
                             type="password" 
                             placeholder="ใส่ Channel Access Token..."
                             value={settings.line_access_token} 
-                            onChange={(e) => setSettings({...settings, line_access_token: e.target.value})}
+                            onChange={(e) => setSettings(prev => ({...prev, line_access_token: e.target.value}))}
                             className="w-full bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 rounded-xl p-3 text-xs outline-none focus:ring-2 focus:ring-blue-500/50"
                           />
                         </div>
@@ -765,7 +787,7 @@ export default function App() {
                             type="text" 
                             placeholder="ใส่ User ID (U...)"
                             value={settings.line_user_id} 
-                            onChange={(e) => setSettings({...settings, line_user_id: e.target.value})}
+                            onChange={(e) => setSettings(prev => ({...prev, line_user_id: e.target.value}))}
                             className="w-full bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 rounded-xl p-3 text-xs outline-none focus:ring-2 focus:ring-blue-500/50"
                           />
                         </div>
