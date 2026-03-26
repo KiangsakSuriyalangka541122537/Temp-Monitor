@@ -31,6 +31,33 @@ export function ReportPage({ sensorNames, thresholds, onBack }: ReportPageProps)
   const [isLoading, setIsLoading] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'normal' | 'abnormal'>('all');
+
+  // Export Modal State
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [exportRange, setExportRange] = useState<ReportRange>('day');
+  const [exportDate, setExportDate] = useState(new Date());
+  const [exportCustomRange, setExportCustomRange] = useState({
+    start: format(subDays(new Date(), 7), 'yyyy-MM-dd'),
+    end: format(new Date(), 'yyyy-MM-dd')
+  });
+  const [exportStatusFilter, setExportStatusFilter] = useState<'all' | 'normal' | 'abnormal'>('all');
+
+  const handleOpenExportModal = () => {
+    setExportRange(range);
+    setExportDate(selectedDate);
+    setExportCustomRange(customRange);
+    setExportStatusFilter(statusFilter);
+    setIsExportModalOpen(true);
+  };
+
+  const changeExportDate = (amount: number) => {
+    const newDate = new Date(exportDate);
+    if (exportRange === 'day') newDate.setDate(newDate.getDate() + amount);
+    else if (exportRange === 'month') newDate.setMonth(newDate.getMonth() + amount);
+    else if (exportRange === 'year') newDate.setFullYear(newDate.getFullYear() + amount);
+    setExportDate(newDate);
+  };
 
   const fetchReportData = useCallback(async () => {
     setIsLoading(true);
@@ -94,10 +121,21 @@ export function ReportPage({ sensorNames, thresholds, onBack }: ReportPageProps)
     fetchReportData();
   }, [fetchReportData]);
 
-  const filteredLogs = logs.filter(log => 
-    log.sensor_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    format(new Date(log.recorded_at), 'HH:mm:ss').includes(searchQuery)
-  );
+  const filteredLogs = logs.filter(log => {
+    const isNormal = log.temperature <= thresholds.tempMax && 
+                     log.temperature >= thresholds.tempMin && 
+                     log.humidity <= thresholds.humidMax && 
+                     log.humidity >= thresholds.humidMin;
+    
+    const matchesSearch = log.sensor_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         format(new Date(log.recorded_at), 'HH:mm:ss').includes(searchQuery);
+    
+    const matchesStatus = statusFilter === 'all' || 
+                         (statusFilter === 'normal' && isNormal) || 
+                         (statusFilter === 'abnormal' && !isNormal);
+    
+    return matchesSearch && matchesStatus;
+  });
 
   const stats = {
     avgTemp: logs.length > 0 ? logs.reduce((acc, curr) => acc + curr.temperature, 0) / logs.length : 0,
@@ -113,6 +151,85 @@ export function ReportPage({ sensorNames, thresholds, onBack }: ReportPageProps)
   const exportPDF = async () => {
     setIsExporting(true);
     try {
+      // Fetch data based on export settings
+      let startDate: string;
+      let endDate: string;
+
+      if (exportRange === 'day') {
+        startDate = startOfDay(exportDate).toISOString();
+        endDate = endOfDay(exportDate).toISOString();
+      } else if (exportRange === 'month') {
+        startDate = startOfMonth(exportDate).toISOString();
+        endDate = endOfMonth(exportDate).toISOString();
+      } else if (exportRange === 'year') {
+        startDate = startOfYear(exportDate).toISOString();
+        endDate = endOfYear(exportDate).toISOString();
+      } else {
+        startDate = startOfDay(new Date(exportCustomRange.start)).toISOString();
+        endDate = endOfDay(new Date(exportCustomRange.end)).toISOString();
+      }
+
+      const { data, error } = await supabase
+        .from('Temp-sketch_mar24a')
+        .select('*')
+        .gte('created_at', startDate)
+        .lte('created_at', endDate)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      let exportLogs: SensorLog[] = [];
+      if (data) {
+        data.forEach((log: any) => {
+          exportLogs.push({
+            id: log.id * 2,
+            sensor_id: 1,
+            sensor_name: sensorNames[1] || 'เซนเซอร์ 1',
+            temperature: log.t1 || 0,
+            humidity: log.h1 || 0,
+            recorded_at: log.created_at
+          });
+          exportLogs.push({
+            id: log.id * 2 + 1,
+            sensor_id: 2,
+            sensor_name: sensorNames[2] || 'เซนเซอร์ 2',
+            temperature: log.t2 || 0,
+            humidity: log.h2 || 0,
+            recorded_at: log.created_at
+          });
+        });
+      }
+
+      // Filter by status
+      const finalExportLogs = exportLogs.filter(log => {
+        const isNormal = log.temperature <= thresholds.tempMax && 
+                         log.temperature >= thresholds.tempMin && 
+                         log.humidity <= thresholds.humidMax && 
+                         log.humidity >= thresholds.humidMin;
+        
+        return exportStatusFilter === 'all' || 
+              (exportStatusFilter === 'normal' && isNormal) || 
+              (exportStatusFilter === 'abnormal' && !isNormal);
+      });
+
+      if (finalExportLogs.length === 0) {
+        alert('ไม่พบข้อมูลในช่วงเวลาและสถานะที่เลือก');
+        setIsExporting(false);
+        return;
+      }
+
+      // Calculate stats for export
+      const exportStats = {
+        avgTemp: finalExportLogs.reduce((acc, curr) => acc + curr.temperature, 0) / finalExportLogs.length,
+        avgHumid: finalExportLogs.reduce((acc, curr) => acc + curr.humidity, 0) / finalExportLogs.length,
+        totalAlerts: finalExportLogs.filter(log => 
+          log.temperature > thresholds.tempMax || 
+          log.temperature < thresholds.tempMin || 
+          log.humidity > thresholds.humidMax || 
+          log.humidity < thresholds.humidMin
+        ).length
+      };
+
       const doc = new jsPDF();
       
       // Fetch Thai Font (THSarabunNew) to support Thai characters in PDF
@@ -141,18 +258,20 @@ export function ReportPage({ sensorNames, thresholds, onBack }: ReportPageProps)
       // Period Info
       doc.setFontSize(10);
       doc.setTextColor(100, 100, 100);
-      const periodText = range === 'custom' 
-        ? `ข้อมูลระหว่างวันที่: ${format(new Date(customRange.start), 'dd/MM/yyyy')} ถึง ${format(new Date(customRange.end), 'dd/MM/yyyy')}` 
-        : `ข้อมูลประจำวันที่: ${format(selectedDate, range === 'day' ? 'dd/MM/yyyy' : range === 'month' ? 'MM/yyyy' : 'yyyy')}`;
+      const periodText = exportRange === 'custom' 
+        ? `ข้อมูลระหว่างวันที่: ${format(new Date(exportCustomRange.start), 'dd/MM/yyyy')} ถึง ${format(new Date(exportCustomRange.end), 'dd/MM/yyyy')}` 
+        : `ข้อมูลประจำวันที่: ${format(exportDate, exportRange === 'day' ? 'dd/MM/yyyy' : exportRange === 'month' ? 'MM/yyyy' : 'yyyy')}`;
       doc.text(periodText, 14, 28);
 
       // Summary
       doc.setFontSize(10);
       doc.setTextColor(60, 60, 60);
-      doc.text(`อุณหภูมิเฉลี่ย: ${stats.avgTemp.toFixed(1)} °C   |   ความชื้นเฉลี่ย: ${stats.avgHumid.toFixed(1)} %   |   พบความผิดปกติ: ${stats.totalAlerts} ครั้ง`, 14, 34);
+      const statusText = exportStatusFilter === 'all' ? 'ทั้งหมด' : exportStatusFilter === 'normal' ? 'ปกติ' : 'ผิดปกติ';
+      doc.text(`ตัวกรองสถานะ: ${statusText}   |   จำนวนที่พบ: ${finalExportLogs.length} รายการ`, 14, 34);
+      doc.text(`อุณหภูมิเฉลี่ย: ${exportStats.avgTemp.toFixed(1)} °C   |   ความชื้นเฉลี่ย: ${exportStats.avgHumid.toFixed(1)} %   |   พบความผิดปกติรวม: ${exportStats.totalAlerts} ครั้ง`, 14, 40);
 
       // Table Data
-      const tableData = filteredLogs.map(log => {
+      const tableData = finalExportLogs.map(log => {
         const isNormal = log.temperature <= thresholds.tempMax && 
                          log.temperature >= thresholds.tempMin && 
                          log.humidity <= thresholds.humidMax && 
@@ -168,7 +287,7 @@ export function ReportPage({ sensorNames, thresholds, onBack }: ReportPageProps)
 
       // Draw Table
       autoTable(doc, {
-        startY: 40,
+        startY: 48,
         head: [['วัน/เวลา', 'จุดติดตั้ง (เซนเซอร์)', 'อุณหภูมิ', 'ความชื้น', 'สถานะ']],
         body: tableData,
         theme: 'grid',
@@ -201,6 +320,7 @@ export function ReportPage({ sensorNames, thresholds, onBack }: ReportPageProps)
       });
 
       doc.save(`รายงานอุณหภูมิ_${format(new Date(), 'yyyyMMdd_HHmm')}.pdf`);
+      setIsExportModalOpen(false);
     } catch (error) {
       console.error('Error generating PDF:', error);
       alert('เกิดข้อผิดพลาดในการสร้าง PDF กรุณาลองใหม่อีกครั้ง');
@@ -241,29 +361,24 @@ export function ReportPage({ sensorNames, thresholds, onBack }: ReportPageProps)
         </div>
         
         <button 
-          onClick={exportPDF}
-          disabled={logs.length === 0 || isExporting}
-          className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-medium transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+          onClick={handleOpenExportModal}
+          className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-medium transition-all shadow-lg shadow-blue-500/20"
         >
-          {isExporting ? (
-            <Activity className="w-5 h-5 animate-spin-slow" />
-          ) : (
-            <Download className="w-5 h-5" />
-          )}
-          {isExporting ? 'กำลังสร้าง PDF...' : 'ส่งออก PDF Report'}
+          <Download className="w-5 h-5" />
+          ส่งออก PDF Report
         </button>
       </div>
 
       {/* Filters */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-        <div className="lg:col-span-3 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-4 sm:p-6 shadow-sm">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        <div className="lg:col-span-6 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-4 sm:p-6 shadow-sm">
           <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-            <div className="flex p-1 bg-zinc-100 dark:bg-zinc-800 rounded-2xl w-full sm:w-auto">
+            <div className="flex p-1 bg-zinc-100 dark:bg-zinc-800 rounded-2xl w-full sm:w-auto overflow-x-auto">
               {(['day', 'month', 'year', 'custom'] as ReportRange[]).map((r) => (
                 <button
                   key={r}
                   onClick={() => setRange(r)}
-                  className={`flex-1 sm:flex-none px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                  className={`flex-1 sm:flex-none px-4 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${
                     range === r 
                       ? 'bg-white dark:bg-zinc-700 text-blue-600 dark:text-blue-400 shadow-sm' 
                       : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
@@ -313,7 +428,25 @@ export function ReportPage({ sensorNames, thresholds, onBack }: ReportPageProps)
           </div>
         </div>
 
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-4 sm:p-6 shadow-sm">
+        <div className="lg:col-span-3 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-4 sm:p-6 shadow-sm">
+          <div className="flex p-1 bg-zinc-100 dark:bg-zinc-800 rounded-2xl w-full">
+            {(['all', 'normal', 'abnormal'] as const).map((f) => (
+              <button
+                key={f}
+                onClick={() => setStatusFilter(f)}
+                className={`flex-1 px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all ${
+                  statusFilter === f 
+                    ? 'bg-white dark:bg-zinc-700 text-blue-600 dark:text-blue-400 shadow-sm' 
+                    : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
+                }`}
+              >
+                {f === 'all' ? 'ทั้งหมด' : f === 'normal' ? 'ปกติ' : 'ผิดปกติ'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="lg:col-span-3 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-4 sm:p-6 shadow-sm">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
             <input 
@@ -432,6 +565,123 @@ export function ReportPage({ sensorNames, thresholds, onBack }: ReportPageProps)
           </table>
         </div>
       </div>
+      {/* Export Modal */}
+      <AnimatePresence>
+        {isExportModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white dark:bg-zinc-900 rounded-3xl shadow-xl w-full max-w-lg overflow-hidden border border-zinc-200 dark:border-zinc-800"
+            >
+              <div className="p-6 border-b border-zinc-200 dark:border-zinc-800">
+                <h2 className="text-xl font-bold flex items-center gap-2">
+                  <Download className="w-5 h-5 text-blue-500" />
+                  ตั้งค่าการส่งออก PDF
+                </h2>
+              </div>
+              
+              <div className="p-6 space-y-6">
+                {/* Range Selection */}
+                <div className="space-y-3">
+                  <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">ช่วงเวลา</label>
+                  <div className="flex p-1 bg-zinc-100 dark:bg-zinc-800 rounded-2xl">
+                    {(['day', 'month', 'year', 'custom'] as ReportRange[]).map((r) => (
+                      <button
+                        key={r}
+                        onClick={() => setExportRange(r)}
+                        className={`flex-1 px-3 py-2 rounded-xl text-sm font-medium transition-all ${
+                          exportRange === r 
+                            ? 'bg-white dark:bg-zinc-700 text-blue-600 dark:text-blue-400 shadow-sm' 
+                            : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
+                        }`}
+                      >
+                        {r === 'day' ? 'รายวัน' : r === 'month' ? 'รายเดือน' : r === 'year' ? 'รายปี' : 'กำหนดเอง'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Date Selection */}
+                {exportRange !== 'custom' ? (
+                  <div className="flex items-center justify-between p-2 bg-zinc-50 dark:bg-zinc-800/50 rounded-2xl border border-zinc-200 dark:border-zinc-700">
+                    <button 
+                      onClick={() => changeExportDate(-1)}
+                      className="p-2 rounded-xl hover:bg-white dark:hover:bg-zinc-700 transition-colors"
+                    >
+                      <ChevronLeft className="w-5 h-5" />
+                    </button>
+                    <div className="flex items-center gap-2 font-medium">
+                      <Calendar className="w-4 h-4 text-zinc-400" />
+                      {format(exportDate, exportRange === 'day' ? 'dd MMMM yyyy' : exportRange === 'month' ? 'MMMM yyyy' : 'yyyy')}
+                    </div>
+                    <button 
+                      onClick={() => changeExportDate(1)}
+                      className="p-2 rounded-xl hover:bg-white dark:hover:bg-zinc-700 transition-colors"
+                    >
+                      <ChevronRight className="w-5 h-5" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="date" 
+                      value={exportCustomRange.start}
+                      onChange={(e) => setExportCustomRange({...exportCustomRange, start: e.target.value})}
+                      className="flex-1 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500/50"
+                    />
+                    <span className="text-zinc-400">ถึง</span>
+                    <input 
+                      type="date" 
+                      value={exportCustomRange.end}
+                      onChange={(e) => setExportCustomRange({...exportCustomRange, end: e.target.value})}
+                      className="flex-1 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500/50"
+                    />
+                  </div>
+                )}
+
+                {/* Status Selection */}
+                <div className="space-y-3">
+                  <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">สถานะ</label>
+                  <div className="flex p-1 bg-zinc-100 dark:bg-zinc-800 rounded-2xl">
+                    {(['all', 'normal', 'abnormal'] as const).map((f) => (
+                      <button
+                        key={f}
+                        onClick={() => setExportStatusFilter(f)}
+                        className={`flex-1 px-3 py-2 rounded-xl text-sm font-medium transition-all ${
+                          exportStatusFilter === f 
+                            ? 'bg-white dark:bg-zinc-700 text-blue-600 dark:text-blue-400 shadow-sm' 
+                            : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
+                        }`}
+                      >
+                        {f === 'all' ? 'ทั้งหมด' : f === 'normal' ? 'ปกติ' : 'ผิดปกติ'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-6 border-t border-zinc-200 dark:border-zinc-800 flex justify-end gap-3 bg-zinc-50 dark:bg-zinc-800/30">
+                <button
+                  onClick={() => setIsExportModalOpen(false)}
+                  className="px-4 py-2 rounded-xl font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  onClick={exportPDF}
+                  disabled={isExporting}
+                  className="flex items-center gap-2 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50"
+                >
+                  {isExporting ? <Activity className="w-4 h-4 animate-spin-slow" /> : <Download className="w-4 h-4" />}
+                  {isExporting ? 'กำลังสร้าง...' : 'ยืนยันการส่งออก'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

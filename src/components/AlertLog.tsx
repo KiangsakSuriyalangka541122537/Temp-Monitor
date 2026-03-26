@@ -127,7 +127,7 @@ export function AlertLog({
               <th className="px-4 sm:px-6 py-3 font-medium">สถานะ</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-100 dark:divide-zinc-100/50">
+          <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
             {logs.length === 0 ? (
               <tr>
                 <td colSpan={4} className="px-4 py-12 text-center text-zinc-400 dark:text-zinc-500">
