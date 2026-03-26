@@ -82,7 +82,8 @@ export default function App() {
     temp_max: 30.0,
     humid_min: 30.0,
     humid_max: 80.0,
-    notify_interval: 10
+    notify_interval: 10,
+    line_notify_token: ''
   });
   const [isSavingSettings, setIsSavingSettings] = useState(false);
 
@@ -100,7 +101,8 @@ export default function App() {
         temp_max: data.temp_max,
         humid_min: data.humid_min,
         humid_max: data.humid_max,
-        notify_interval: data.notify_interval
+        notify_interval: data.notify_interval,
+        line_notify_token: data.line_notify_token || ''
       };
       
       setSettings(prev => {
@@ -132,6 +134,7 @@ export default function App() {
         humid_min: settings.humid_min,
         humid_max: settings.humid_max,
         notify_interval: settings.notify_interval,
+        line_notify_token: settings.line_notify_token,
         sensor_names: sensorNames,
         updated_at: new Date().toISOString()
       })
@@ -708,6 +711,45 @@ export default function App() {
                       className="w-full bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 rounded-xl p-3 outline-none focus:ring-2 focus:ring-zinc-500/50"
                     />
                     <p className="text-xs text-zinc-400">ระยะเวลาขั้นต่ำก่อนจะส่ง LINE แจ้งเตือนซ้ำอีกครั้ง</p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <label className="text-sm font-medium text-zinc-500 uppercase tracking-wider">LINE Notify Token</label>
+                      {settings.line_notify_token && (
+                        <button 
+                          onClick={async () => {
+                            try {
+                              const response = await fetch('https://notify-api.line.me/api/notify', {
+                                method: 'POST',
+                                headers: {
+                                  'Content-Type': 'application/x-www-form-urlencoded',
+                                  'Authorization': `Bearer ${settings.line_notify_token}`
+                                },
+                                body: new URLSearchParams({ message: '🔔 ทดสอบการแจ้งเตือนจากระบบ Server Monitor' })
+                              });
+                              // Note: This might fail in browser due to CORS, but it's a good placeholder.
+                              // In reality, we should call an Edge Function to do this.
+                              if (response.ok) toast.success('ส่งข้อความทดสอบเรียบร้อย');
+                              else toast.error('ส่งไม่สำเร็จ (อาจติดปัญหา CORS)');
+                            } catch (e) {
+                              toast.error('เกิดข้อผิดพลาดในการส่ง');
+                            }
+                          }}
+                          className="text-[10px] bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 px-2 py-1 rounded-lg hover:bg-emerald-200 transition-colors"
+                        >
+                          ทดสอบส่ง
+                        </button>
+                      )}
+                    </div>
+                    <input 
+                      type="password" 
+                      placeholder="ใส่ Token ของคุณที่นี่..."
+                      value={settings.line_notify_token} 
+                      onChange={(e) => setSettings({...settings, line_notify_token: e.target.value})}
+                      className="w-full bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 rounded-xl p-3 outline-none focus:ring-2 focus:ring-emerald-500/50"
+                    />
+                    <p className="text-xs text-zinc-400">เอา Token ได้ที่ notify-bot.line.me</p>
                   </div>
                 </div>
 
