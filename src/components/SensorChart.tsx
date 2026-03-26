@@ -205,10 +205,11 @@ export function SensorChart({
         ticks: {
           maxRotation: 0,
           autoSkip: true,
-          maxTicksLimit: 10,
+          autoSkipPadding: 15,
+          maxTicksLimit: isMobile ? 5 : 10,
           color: isDark ? '#52525b' : '#a1a1aa',
           font: {
-            size: 10
+            size: isMobile ? 8 : 10
           }
         }
       },

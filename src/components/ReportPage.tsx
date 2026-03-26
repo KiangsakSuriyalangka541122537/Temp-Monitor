@@ -5,14 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../lib/supabase';
 import { SensorLog } from '../types';
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
-
-// Extend jsPDF with autotable
-declare module 'jspdf' {
-  interface jsPDF {
-    autoTable: (options: any) => jsPDF;
-  }
-}
+import autoTable from 'jspdf-autotable';
 
 interface ReportPageProps {
   sensorNames: Record<number, string>;
@@ -150,7 +143,7 @@ export function ReportPage({ sensorNames, thresholds, onBack }: ReportPageProps)
       ];
     });
 
-    doc.autoTable({
+    autoTable(doc, {
       startY: 80,
       head: [['Date/Time', 'Sensor', 'Temp', 'Humid', 'Status']],
       body: tableData,
@@ -185,6 +178,9 @@ export function ReportPage({ sensorNames, thresholds, onBack }: ReportPageProps)
             <h1 className="text-2xl font-bold flex items-center gap-2">
               <FileText className="w-6 h-6 text-blue-500" />
               รายงานประวัติข้อมูล
+              {isLoading && logs.length > 0 && (
+                <Activity className="w-4 h-4 text-blue-500 animate-spin-slow" />
+              )}
             </h1>
             <p className="text-sm text-zinc-500">ดูประวัติการทำงานและส่งออกข้อมูลเป็น PDF</p>
           </div>
@@ -305,7 +301,7 @@ export function ReportPage({ sensorNames, thresholds, onBack }: ReportPageProps)
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-              {isLoading ? (
+              {isLoading && logs.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-6 py-12 text-center">
                     <div className="flex flex-col items-center gap-2">
@@ -314,7 +310,7 @@ export function ReportPage({ sensorNames, thresholds, onBack }: ReportPageProps)
                     </div>
                   </td>
                 </tr>
-              ) : filteredLogs.length === 0 ? (
+              ) : !isLoading && filteredLogs.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-6 py-12 text-center">
                     <div className="flex flex-col items-center gap-2">
