@@ -353,7 +353,10 @@ export default function App() {
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'device_settings', filter: 'id=eq.1' },
         (payload) => {
+          console.log('Settings updated from cloud:', payload.new);
           const newData = payload.new;
+          
+          // อัปเดตเกณฑ์การแจ้งเตือน
           setSettings({
             temp_min: newData.temp_min,
             temp_max: newData.temp_max,
@@ -361,12 +364,20 @@ export default function App() {
             humid_max: newData.humid_max,
             notify_interval: newData.notify_interval
           });
+          
+          // อัปเดตชื่อเซนเซอร์ (ซิงค์ข้ามเครื่อง)
           if (newData.sensor_names) {
-            setSensorNames(newData.sensor_names);
+            const names = typeof newData.sensor_names === 'string' 
+              ? JSON.parse(newData.sensor_names) 
+              : newData.sensor_names;
+            setSensorNames(names);
+            localStorage.setItem('sensorNames', JSON.stringify(names));
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('Settings subscription status:', status);
+      });
 
     return () => {
       clearInterval(pollInterval);
