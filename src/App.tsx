@@ -19,12 +19,17 @@ export default function App() {
   const [latestData, setLatestData] = useState<Record<number, SensorLog>>({});
   const [chartData, setChartData] = useState<SensorLog[]>([]);
   const [alertLogs, setAlertLogs] = useState<AlertLogType[]>([]);
-  const [sensorNames, setSensorNames] = useState<Record<number, string>>(() => {
-    const saved = localStorage.getItem('sensorNames');
-    return saved ? JSON.parse(saved) : { 1: 'เซนเซอร์ 1', 2: 'เซนเซอร์ 2' };
-  });
+  const [sensorNames, setSensorNames] = useState<Record<number, string>>({ 1: 'เซนเซอร์ 1', 2: 'เซนเซอร์ 2' });
 
-  // บันทึกชื่อเซนเซอร์ลง localStorage เมื่อมีการเปลี่ยนแปลง
+  // โหลดชื่อจาก LocalStorage เป็นค่าเริ่มต้นชั่วคราว
+  useEffect(() => {
+    const saved = localStorage.getItem('sensorNames');
+    if (saved) {
+      setSensorNames(JSON.parse(saved));
+    }
+  }, []);
+
+  // บันทึกชื่อลง localStorage เมื่อมีการเปลี่ยนแปลง (เพื่อความเร็วในการโหลดครั้งถัดไป)
   useEffect(() => {
     localStorage.setItem('sensorNames', JSON.stringify(sensorNames));
   }, [sensorNames]);
@@ -47,12 +52,12 @@ export default function App() {
         .eq('id', 1);
         
       if (error) {
-        console.warn('Supabase sync failed, using local storage only:', error.message);
-        // ไม่ต้องแจ้ง Error ตัวใหญ่ให้ผู้ใช้ตกใจ เพราะเรามี LocalStorage สำรองไว้แล้ว
-        // แต่ถ้าต้องการให้ผู้ใช้ทราบว่าซิงค์ไม่ได้ สามารถเปิด toast ได้
+        console.warn('Supabase sync failed:', error.message);
       } else {
+        // ไม่ต้องเรียก setSensorNames ที่นี่ เพราะ Realtime Subscription จะจัดการให้เอง
+        // เพื่อให้มั่นใจว่าข้อมูลในทุกเครื่องตรงกับบน Cloud จริงๆ
         toast.success('บันทึกชื่อเซนเซอร์เรียบร้อยแล้ว', {
-          description: `เปลี่ยนชื่อเป็น "${newName}" และซิงค์ข้อมูลแล้ว`,
+          description: `เปลี่ยนชื่อเป็น "${newName}" และซิงค์ไปยังอุปกรณ์อื่นแล้ว`,
           duration: 2000
         });
       }
