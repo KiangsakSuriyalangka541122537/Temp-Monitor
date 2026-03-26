@@ -5,17 +5,19 @@
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { format } from 'date-fns';
-import { Sun, Moon, CheckCircle2, AlertTriangle, Activity, Settings, X, Check } from 'lucide-react';
+import { Sun, Moon, CheckCircle2, AlertTriangle, Activity, Settings, X, Check, FileText } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Toaster, toast } from 'sonner';
 import { supabase } from './lib/supabase';
 import { SensorCard } from './components/SensorCard';
 import { SensorChart } from './components/SensorChart';
 import { AlertLog } from './components/AlertLog';
+import { ReportPage } from './components/ReportPage';
 import { SensorLog, AlertLog as AlertLogType } from './types';
 
 export default function App() {
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [view, setView] = useState<'dashboard' | 'report'>('dashboard');
   const [latestData, setLatestData] = useState<Record<number, SensorLog>>({});
   const [chartData, setChartData] = useState<SensorLog[]>([]);
   const [alertLogs, setAlertLogs] = useState<AlertLogType[]>([]);
@@ -458,6 +460,15 @@ export default function App() {
             </div>
 
             <button
+              onClick={() => setView('report')}
+              className="p-2.5 sm:p-3 rounded-xl sm:rounded-2xl bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800/80 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors shadow-sm flex items-center gap-2"
+              title="ดูรายงานประวัติ"
+            >
+              <FileText className="w-4 h-4 sm:w-5 sm:h-5" />
+              <span className="hidden sm:inline text-sm font-medium">รายงาน</span>
+            </button>
+
+            <button
               onClick={() => setShowSettings(true)}
               className="p-2.5 sm:p-3 rounded-xl sm:rounded-2xl bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800/80 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors shadow-sm"
               title="ตั้งค่าเกณฑ์การแจ้งเตือน"
@@ -475,99 +486,131 @@ export default function App() {
           </div>
         </header>
 
-        {/* SYSTEM STATUS BANNER */}
-        {systemStatus !== 'loading' && (
-          <div className={`mb-2 sm:mb-3 p-2 sm:p-3 rounded-2xl sm:rounded-3xl border flex items-center gap-3 sm:gap-4 transition-colors duration-300 shadow-sm ${
-            systemStatus === 'normal' 
-              ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/50 text-emerald-800 dark:text-emerald-300'
-              : systemStatus === 'warning'
-              ? 'bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-900/50 text-orange-800 dark:text-orange-300'
-              : systemStatus === 'offline'
-              ? 'bg-zinc-100 dark:bg-zinc-900/40 border-zinc-300 dark:border-zinc-700 text-zinc-800 dark:text-zinc-300 animate-pulse'
-              : 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900/50 text-red-800 dark:text-red-300'
-          }`}>
-            <div className={`p-1.5 sm:p-2 rounded-full shrink-0 ${
-              systemStatus === 'normal' ? 'bg-emerald-100 dark:bg-emerald-900/50' :
-              systemStatus === 'warning' ? 'bg-orange-100 dark:bg-orange-900/50' :
-              systemStatus === 'offline' ? 'bg-zinc-200 dark:bg-zinc-800' :
-              'bg-red-100 dark:bg-red-900/50'
-            }`}>
-              {systemStatus === 'normal' ? <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6" /> : 
-               systemStatus === 'offline' ? <Activity className="w-5 h-5 sm:w-6 sm:h-6 animate-spin-slow" /> :
-               <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6" />}
-            </div>
-            <div>
-              <h2 className="font-semibold text-sm sm:text-lg leading-tight">
-                {systemStatus === 'normal' ? 'ระบบปกติ' :
-                 systemStatus === 'warning' ? 'พบความผิดปกติ' :
-                 systemStatus === 'offline' ? 'เซนเซอร์ขาดการเชื่อมต่อ (Offline)' :
-                 'วิกฤต: พบความผิดปกติรุนแรง'}
-              </h2>
-              <p className="text-[10px] sm:text-sm opacity-80 mt-0.5">
-                {systemStatus === 'normal' ? 'อุณหภูมิและความชื้นอยู่ในเกณฑ์มาตรฐาน' :
-                 systemStatus === 'offline' ? 'ไม่ได้รับข้อมูลใหม่เกิน 5 นาที กรุณาตรวจสอบอุปกรณ์' :
-                 'กรุณาตรวจสอบค่าเซ็นเซอร์ที่มีการแจ้งเตือน'}
-              </p>
-            </div>
-          </div>
-        )}
+        {/* MAIN CONTENT AREA */}
+        <AnimatePresence mode="wait">
+          {view === 'dashboard' ? (
+            <motion.div
+              key="dashboard"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
+            >
+              {/* SYSTEM STATUS BANNER */}
+              {systemStatus !== 'loading' && (
+                <div className={`mb-2 sm:mb-3 p-2 sm:p-3 rounded-2xl sm:rounded-3xl border flex items-center gap-3 sm:gap-4 transition-colors duration-300 shadow-sm ${
+                  systemStatus === 'normal' 
+                    ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/50 text-emerald-800 dark:text-emerald-300'
+                    : systemStatus === 'warning'
+                    ? 'bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-900/50 text-orange-800 dark:text-orange-300'
+                    : systemStatus === 'offline'
+                    ? 'bg-zinc-100 dark:bg-zinc-900/40 border-zinc-300 dark:border-zinc-700 text-zinc-800 dark:text-zinc-300 animate-pulse'
+                    : 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900/50 text-red-800 dark:text-red-300'
+                }`}>
+                  <div className={`p-1.5 sm:p-2 rounded-full shrink-0 ${
+                    systemStatus === 'normal' ? 'bg-emerald-100 dark:bg-emerald-900/50' :
+                    systemStatus === 'warning' ? 'bg-orange-100 dark:bg-orange-900/50' :
+                    systemStatus === 'offline' ? 'bg-zinc-200 dark:bg-zinc-800' :
+                    'bg-red-100 dark:bg-red-900/50'
+                  }`}>
+                    {systemStatus === 'normal' ? <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6" /> : 
+                     systemStatus === 'offline' ? <Activity className="w-5 h-5 sm:w-6 sm:h-6 animate-spin-slow" /> :
+                     <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6" />}
+                  </div>
+                  <div>
+                    <h2 className="font-semibold text-sm sm:text-lg leading-tight">
+                      {systemStatus === 'normal' ? 'ระบบปกติ' :
+                       systemStatus === 'warning' ? 'พบความผิดปกติ' :
+                       systemStatus === 'offline' ? 'เซนเซอร์ขาดการเชื่อมต่อ (Offline)' :
+                       'วิกฤต: พบความผิดปกติรุนแรง'}
+                    </h2>
+                    <p className="text-[10px] sm:text-sm opacity-80 mt-0.5">
+                      {systemStatus === 'normal' ? 'อุณหภูมิและความชื้นอยู่ในเกณฑ์มาตรฐาน' :
+                       systemStatus === 'offline' ? 'ไม่ได้รับข้อมูลใหม่เกิน 5 นาที กรุณาตรวจสอบอุปกรณ์' :
+                       'กรุณาตรวจสอบค่าเซ็นเซอร์ที่มีการแจ้งเตือน'}
+                    </p>
+                  </div>
+                </div>
+              )}
 
-        {/* SENSOR CARDS (PRIMARY INFO) */}
-        <div className={`grid gap-3 sm:gap-6 mb-2 sm:mb-3 ${
-          Object.keys(latestData).length === 1 ? 'grid-cols-1' : 
-          Object.keys(latestData).length === 2 ? 'grid-cols-2' :
-          'grid-cols-2 sm:grid-cols-2 lg:grid-cols-4'
-        }`}>
-          {(Object.entries(latestData) as [string, SensorLog][]).map(([id, data]) => (
-            <div key={id}>
-              <SensorCard 
-                data={data} 
-                sensorName={sensorNames[data.sensor_id] || data.sensor_name} 
-                onNameChange={(newName) => handleNameChange(data.sensor_id, newName)}
-                thresholds={{ 
-                  tempMin: settings.temp_min, 
-                  tempMax: settings.temp_max, 
-                  humidMin: settings.humid_min, 
-                  humidMax: settings.humid_max 
+              {/* SENSOR CARDS (PRIMARY INFO) */}
+              <div className={`grid gap-3 sm:gap-6 mb-2 sm:mb-3 ${
+                Object.keys(latestData).length === 1 ? 'grid-cols-1' : 
+                Object.keys(latestData).length === 2 ? 'grid-cols-2' :
+                'grid-cols-2 sm:grid-cols-2 lg:grid-cols-4'
+              }`}>
+                {(Object.entries(latestData) as [string, SensorLog][]).map(([id, data]) => (
+                  <div key={id}>
+                    <SensorCard 
+                      data={data} 
+                      sensorName={sensorNames[data.sensor_id] || data.sensor_name} 
+                      onNameChange={(newName) => handleNameChange(data.sensor_id, newName)}
+                      thresholds={{ 
+                        tempMin: settings.temp_min, 
+                        tempMax: settings.temp_max, 
+                        humidMin: settings.humid_min, 
+                        humidMax: settings.humid_max 
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
+
+              {/* MAIN CONTENT GRID (SECONDARY INFO) */}
+              <div className="w-full lg:h-[600px] mb-4 sm:mb-6">
+                {/* GRAPH SECTION (TRENDS) */}
+                <div className="h-auto lg:h-full">
+                  <SensorChart 
+                    data={chartData} 
+                    sensorNames={sensorNames}
+                    timeRange={timeRange} 
+                    onTimeRangeChange={setTimeRange} 
+                    customFilter={customFilter}
+                    onCustomFilterChange={setCustomFilter}
+                    theme={theme}
+                  />
+                </div>
+              </div>
+
+              {/* ALERT LOG (FULL WIDTH BELOW) */}
+              <div className="w-full h-auto lg:h-[450px] overflow-hidden">
+                <AlertLog 
+                  logs={alertLogs} 
+                  sensorNames={sensorNames} 
+                  thresholds={{ 
+                    tempMin: settings.temp_min, 
+                    tempMax: settings.temp_max, 
+                    humidMin: settings.humid_min, 
+                    humidMax: settings.humid_max 
+                  }} 
+                  timeRange={timeRange}
+                  customFilter={customFilter}
+                  onCustomFilterChange={setCustomFilter}
+                  onTimeRangeChange={setTimeRange}
+                />
+              </div>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="report"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
+            >
+              <ReportPage 
+                sensorNames={sensorNames}
+                thresholds={{
+                  tempMin: settings.temp_min,
+                  tempMax: settings.temp_max,
+                  humidMin: settings.humid_min,
+                  humidMax: settings.humid_max
                 }}
+                onBack={() => setView('dashboard')}
               />
-            </div>
-          ))}
-        </div>
-
-        {/* MAIN CONTENT GRID (SECONDARY INFO) */}
-        <div className="w-full lg:h-[600px] mb-4 sm:mb-6">
-          {/* GRAPH SECTION (TRENDS) */}
-          <div className="h-auto lg:h-full">
-            <SensorChart 
-              data={chartData} 
-              sensorNames={sensorNames}
-              timeRange={timeRange} 
-              onTimeRangeChange={setTimeRange} 
-              customFilter={customFilter}
-              onCustomFilterChange={setCustomFilter}
-              theme={theme}
-            />
-          </div>
-        </div>
-
-        {/* ALERT LOG (FULL WIDTH BELOW) */}
-        <div className="w-full h-auto lg:h-[450px] overflow-hidden">
-          <AlertLog 
-            logs={alertLogs} 
-            sensorNames={sensorNames} 
-            thresholds={{ 
-              tempMin: settings.temp_min, 
-              tempMax: settings.temp_max, 
-              humidMin: settings.humid_min, 
-              humidMax: settings.humid_max 
-            }} 
-            timeRange={timeRange}
-            customFilter={customFilter}
-            onCustomFilterChange={setCustomFilter}
-            onTimeRangeChange={setTimeRange}
-          />
-        </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* SETTINGS MODAL */}
         <AnimatePresence>
