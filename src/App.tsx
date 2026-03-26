@@ -83,7 +83,8 @@ export default function App() {
     humid_min: 30.0,
     humid_max: 80.0,
     notify_interval: 10,
-    line_notify_token: ''
+    line_access_token: '',
+    line_user_id: ''
   });
   const [isSavingSettings, setIsSavingSettings] = useState(false);
 
@@ -102,7 +103,8 @@ export default function App() {
         humid_min: data.humid_min,
         humid_max: data.humid_max,
         notify_interval: data.notify_interval,
-        line_notify_token: data.line_notify_token || ''
+        line_access_token: data.line_access_token || '',
+        line_user_id: data.line_user_id || ''
       };
       
       setSettings(prev => {
@@ -134,7 +136,8 @@ export default function App() {
         humid_min: settings.humid_min,
         humid_max: settings.humid_max,
         notify_interval: settings.notify_interval,
-        line_notify_token: settings.line_notify_token,
+        line_access_token: settings.line_access_token,
+        line_user_id: settings.line_user_id,
         sensor_names: sensorNames,
         updated_at: new Date().toISOString()
       })
@@ -713,43 +716,62 @@ export default function App() {
                     <p className="text-xs text-zinc-400">ระยะเวลาขั้นต่ำก่อนจะส่ง LINE แจ้งเตือนซ้ำอีกครั้ง</p>
                   </div>
 
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <label className="text-sm font-medium text-zinc-500 uppercase tracking-wider">LINE Notify Token</label>
-                      {settings.line_notify_token && (
-                        <button 
-                          onClick={async () => {
-                            try {
-                              const response = await fetch('https://notify-api.line.me/api/notify', {
-                                method: 'POST',
-                                headers: {
-                                  'Content-Type': 'application/x-www-form-urlencoded',
-                                  'Authorization': `Bearer ${settings.line_notify_token}`
-                                },
-                                body: new URLSearchParams({ message: '🔔 ทดสอบการแจ้งเตือนจากระบบ Server Monitor' })
-                              });
-                              // Note: This might fail in browser due to CORS, but it's a good placeholder.
-                              // In reality, we should call an Edge Function to do this.
-                              if (response.ok) toast.success('ส่งข้อความทดสอบเรียบร้อย');
-                              else toast.error('ส่งไม่สำเร็จ (อาจติดปัญหา CORS)');
-                            } catch (e) {
-                              toast.error('เกิดข้อผิดพลาดในการส่ง');
-                            }
-                          }}
-                          className="text-[10px] bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 px-2 py-1 rounded-lg hover:bg-emerald-200 transition-colors"
-                        >
-                          ทดสอบส่ง
-                        </button>
-                      )}
+                  <div className="space-y-4 pt-2 border-t border-zinc-100 dark:border-zinc-800">
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">LINE Messaging API (แทน Notify)</label>
+                        {settings.line_access_token && settings.line_user_id && (
+                          <button 
+                            onClick={async () => {
+                              try {
+                                const response = await fetch('https://api.line.me/v2/bot/message/push', {
+                                  method: 'POST',
+                                  headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${settings.line_access_token}`
+                                  },
+                                  body: JSON.stringify({
+                                    to: settings.line_user_id,
+                                    messages: [{ type: 'text', text: '🔔 ทดสอบการแจ้งเตือนจากระบบ Server Monitor (Messaging API)' }]
+                                  })
+                                });
+                                if (response.ok) toast.success('ส่งข้อความทดสอบเรียบร้อย');
+                                else toast.error('ส่งไม่สำเร็จ ตรวจสอบ Token/ID');
+                              } catch (e) {
+                                toast.error('เกิดข้อผิดพลาดในการส่ง');
+                              }
+                            }}
+                            className="text-[10px] bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-2 py-1 rounded-lg hover:bg-blue-200 transition-colors"
+                          >
+                            ทดสอบส่ง
+                          </button>
+                        )}
+                      </div>
+                      
+                      <div className="space-y-3">
+                        <div>
+                          <label className="text-[10px] text-zinc-500 mb-1 block">Channel Access Token</label>
+                          <input 
+                            type="password" 
+                            placeholder="ใส่ Channel Access Token..."
+                            value={settings.line_access_token} 
+                            onChange={(e) => setSettings({...settings, line_access_token: e.target.value})}
+                            className="w-full bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 rounded-xl p-3 text-xs outline-none focus:ring-2 focus:ring-blue-500/50"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-zinc-500 mb-1 block">Your User ID</label>
+                          <input 
+                            type="text" 
+                            placeholder="ใส่ User ID (U...)"
+                            value={settings.line_user_id} 
+                            onChange={(e) => setSettings({...settings, line_user_id: e.target.value})}
+                            className="w-full bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 rounded-xl p-3 text-xs outline-none focus:ring-2 focus:ring-blue-500/50"
+                          />
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-zinc-400">ตั้งค่าได้ที่ LINE Developers Console</p>
                     </div>
-                    <input 
-                      type="password" 
-                      placeholder="ใส่ Token ของคุณที่นี่..."
-                      value={settings.line_notify_token} 
-                      onChange={(e) => setSettings({...settings, line_notify_token: e.target.value})}
-                      className="w-full bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 rounded-xl p-3 outline-none focus:ring-2 focus:ring-emerald-500/50"
-                    />
-                    <p className="text-xs text-zinc-400">เอา Token ได้ที่ notify-bot.line.me</p>
                   </div>
                 </div>
 
