@@ -40,7 +40,7 @@ export function AlertLog({
         <h2 className="text-sm sm:text-base font-medium text-zinc-900 dark:text-zinc-100">ประวัติค่าผิดปกติ</h2>
         
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-          <div className="flex bg-zinc-100 dark:bg-zinc-900/50 p-1 rounded-xl border border-zinc-200 dark:border-zinc-800 w-full sm:w-auto overflow-x-auto no-scrollbar">
+          <div className="flex bg-zinc-100 dark:bg-zinc-900/50 p-1 rounded-2xl border border-zinc-200 dark:border-zinc-800 w-full sm:w-auto overflow-x-auto no-scrollbar shadow-inner">
             {[
               { id: 'realtime', label: 'Real-time' },
               { id: '24h', label: '24 ชม.' },
@@ -51,10 +51,10 @@ export function AlertLog({
               <button
                 key={range.id}
                 onClick={() => onTimeRangeChange(range.id as any)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all whitespace-nowrap flex-1 sm:flex-none ${
+                className={`px-3 py-1.5 text-xs font-medium rounded-xl transition-all duration-200 whitespace-nowrap flex-1 sm:flex-none ${
                   timeRange === range.id
-                    ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm'
-                    : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
+                    ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm ring-1 ring-zinc-200 dark:ring-zinc-700'
+                    : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-200/50 dark:hover:bg-zinc-800/50'
                 }`}
               >
                 {range.label}

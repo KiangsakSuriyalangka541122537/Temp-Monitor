@@ -272,13 +272,13 @@ export function SensorChart({
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
           <h2 className="text-sm sm:text-base font-medium text-zinc-900 dark:text-zinc-100">แนวโน้มอุณหภูมิและความชื้นแบบ Real-time</h2>
           
-          <div className="flex bg-zinc-100 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800/80 rounded-xl p-1 shadow-inner w-full sm:w-auto overflow-x-auto no-scrollbar">
+          <div className="flex bg-zinc-100 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800/80 rounded-2xl p-1 shadow-inner w-full sm:w-auto overflow-x-auto no-scrollbar">
             <div className="flex min-w-max">
               {(['realtime', '24h', '7d', '30d', 'custom'] as const).map((range) => (
                 <button
                   key={range}
                   onClick={() => onTimeRangeChange(range)}
-                  className={`px-3 sm:px-4 py-1.5 text-[10px] sm:text-xs font-medium rounded-lg transition-all duration-200 whitespace-nowrap ${
+                  className={`px-3 sm:px-4 py-1.5 text-[10px] sm:text-xs font-medium rounded-xl transition-all duration-200 whitespace-nowrap ${
                     timeRange === range
                       ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-sm ring-1 ring-zinc-200 dark:ring-zinc-700'
                       : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-200/50 dark:hover:bg-zinc-800/50'

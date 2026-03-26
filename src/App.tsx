@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { format } from 'date-fns';
 import { Sun, Moon, CheckCircle2, AlertTriangle, Activity, Settings, X, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -116,121 +116,120 @@ export default function App() {
   }, []);
 
   // ดึงข้อมูลและตั้งค่า Realtime Subscription
-  useEffect(() => {
-    // ฟังก์ชันสำหรับดึงข้อมูลเริ่มต้น
-    const fetchData = async () => {
-      try {
-        // ดึงข้อมูลล่าสุดจากตาราง Temp-sketch_mar24a
-        const { data: latest, error: latestError } = await supabase
-          .from('Temp-sketch_mar24a')
-          .select('*')
-          .order('created_at', { ascending: false })
-          .limit(1);
+  const fetchData = useCallback(async () => {
+    try {
+      // ดึงข้อมูลล่าสุดจากตาราง Temp-sketch_mar24a
+      const { data: latest, error: latestError } = await supabase
+        .from('Temp-sketch_mar24a')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(1);
 
-        if (latestError) throw latestError;
+      if (latestError) throw latestError;
 
-        if (latest && latest.length > 0) {
-          setIsConnected(true);
-          const log = latest[0];
-          const newLatestData: Record<number, SensorLog> = {
-            1: {
-              id: log.id,
-              sensor_id: 1,
-              sensor_name: sensorNames[1] || 'เซนเซอร์ 1',
-              temperature: log.t1 || 0,
-              humidity: log.h1 || 0,
-              recorded_at: log.created_at
-            },
-            2: {
-              id: log.id,
-              sensor_id: 2,
-              sensor_name: sensorNames[2] || 'เซนเซอร์ 2',
-              temperature: log.t2 || 0,
-              humidity: log.h2 || 0,
-              recorded_at: log.created_at
-            }
-          };
-          setLatestData(newLatestData);
-          setLastUpdated(new Date());
-        }
-
-        // ดึงข้อมูลสำหรับกราฟและ Alert Log
-        let query = supabase
-          .from('Temp-sketch_mar24a')
-          .select('*');
-
-        if (timeRange === 'custom') {
-          const start = `${customFilter.startDate}T${customFilter.startTime}:00`;
-          const end = `${customFilter.endDate}T${customFilter.endTime}:59`;
-          query = query.gte('created_at', start).lte('created_at', end);
-        } else if (timeRange === '24h') {
-          const yesterday = new Date();
-          yesterday.setHours(yesterday.getHours() - 24);
-          query = query.gte('created_at', yesterday.toISOString());
-        } else if (timeRange === '7d') {
-          const weekAgo = new Date();
-          weekAgo.setDate(weekAgo.getDate() - 7);
-          query = query.gte('created_at', weekAgo.toISOString());
-        } else if (timeRange === '30d') {
-          const monthAgo = new Date();
-          monthAgo.setDate(monthAgo.getDate() - 30);
-          query = query.gte('created_at', monthAgo.toISOString());
-        }
-
-        const { data: history, error: historyError } = await query
-          .order('created_at', { ascending: false })
-          .limit(timeRange === 'realtime' ? 100 : 1000);
-
-        if (!historyError && history) {
-          const mappedHistory: SensorLog[] = [];
-          history.forEach((log: any) => {
-            // เพิ่มข้อมูลเซนเซอร์ 1
-            mappedHistory.push({
-              id: log.id * 2, // สร้าง id จำลองให้ไม่ซ้ำ
-              sensor_id: 1,
-              sensor_name: sensorNames[1] || 'เซนเซอร์ 1',
-              temperature: log.t1 || 0,
-              humidity: log.h1 || 0,
-              recorded_at: log.created_at
-            });
-            // เพิ่มข้อมูลเซนเซอร์ 2
-            mappedHistory.push({
-              id: log.id * 2 + 1,
-              sensor_id: 2,
-              sensor_name: sensorNames[2] || 'เซนเซอร์ 2',
-              temperature: log.t2 || 0,
-              humidity: log.h2 || 0,
-              recorded_at: log.created_at
-            });
-          });
-          setChartData(mappedHistory.reverse());
-          
-          // กรองข้อมูลที่ผิดปกติมาแสดงใน Alert Log
-          const alerts = mappedHistory
-            .filter(log => 
-              log.temperature > settings.temp_max || 
-              log.temperature < settings.temp_min || 
-              log.humidity > settings.humid_max || 
-              log.humidity < settings.humid_min
-            )
-            .map(log => ({
-              ...log,
-              status: (log.temperature > settings.temp_max || log.temperature < settings.temp_min) && 
-                      (log.humidity > settings.humid_max || log.humidity < settings.humid_min)
-                ? 'both_high' 
-                : (log.temperature > settings.temp_max || log.temperature < settings.temp_min)
-                  ? 'temperature_high' 
-                  : 'humidity_high'
-            } as AlertLogType))
-            .sort((a, b) => new Date(b.recorded_at).getTime() - new Date(a.recorded_at).getTime());
-          setAlertLogs(alerts);
-        }
-
-      } catch (error) {
-        console.error('Error fetching data:', error);
+      if (latest && latest.length > 0) {
+        setIsConnected(true);
+        const log = latest[0];
+        const newLatestData: Record<number, SensorLog> = {
+          1: {
+            id: log.id,
+            sensor_id: 1,
+            sensor_name: sensorNames[1] || 'เซนเซอร์ 1',
+            temperature: log.t1 || 0,
+            humidity: log.h1 || 0,
+            recorded_at: log.created_at
+          },
+          2: {
+            id: log.id,
+            sensor_id: 2,
+            sensor_name: sensorNames[2] || 'เซนเซอร์ 2',
+            temperature: log.t2 || 0,
+            humidity: log.h2 || 0,
+            recorded_at: log.created_at
+          }
+        };
+        setLatestData(newLatestData);
+        setLastUpdated(new Date());
       }
-    };
 
+      // ดึงข้อมูลสำหรับกราฟและ Alert Log
+      let query = supabase
+        .from('Temp-sketch_mar24a')
+        .select('*');
+
+      if (timeRange === 'custom') {
+        const start = new Date(`${customFilter.startDate}T${customFilter.startTime}:00`).toISOString();
+        const end = new Date(`${customFilter.endDate}T${customFilter.endTime}:59`).toISOString();
+        query = query.gte('created_at', start).lte('created_at', end);
+      } else if (timeRange === '24h') {
+        const yesterday = new Date();
+        yesterday.setHours(yesterday.getHours() - 24);
+        query = query.gte('created_at', yesterday.toISOString());
+      } else if (timeRange === '7d') {
+        const weekAgo = new Date();
+        weekAgo.setDate(weekAgo.getDate() - 7);
+        query = query.gte('created_at', weekAgo.toISOString());
+      } else if (timeRange === '30d') {
+        const monthAgo = new Date();
+        monthAgo.setDate(monthAgo.getDate() - 30);
+        query = query.gte('created_at', monthAgo.toISOString());
+      }
+
+      const { data: history, error: historyError } = await query
+        .order('created_at', { ascending: false })
+        .limit(timeRange === 'realtime' ? 100 : 1000);
+
+      if (!historyError && history) {
+        const mappedHistory: SensorLog[] = [];
+        history.forEach((log: any) => {
+          // เพิ่มข้อมูลเซนเซอร์ 1
+          mappedHistory.push({
+            id: log.id * 2, // สร้าง id จำลองให้ไม่ซ้ำ
+            sensor_id: 1,
+            sensor_name: sensorNames[1] || 'เซนเซอร์ 1',
+            temperature: log.t1 || 0,
+            humidity: log.h1 || 0,
+            recorded_at: log.created_at
+          });
+          // เพิ่มข้อมูลเซนเซอร์ 2
+          mappedHistory.push({
+            id: log.id * 2 + 1,
+            sensor_id: 2,
+            sensor_name: sensorNames[2] || 'เซนเซอร์ 2',
+            temperature: log.t2 || 0,
+            humidity: log.h2 || 0,
+            recorded_at: log.created_at
+          });
+        });
+        setChartData(mappedHistory.reverse());
+        
+        // กรองข้อมูลที่ผิดปกติมาแสดงใน Alert Log
+        const alerts = mappedHistory
+          .filter(log => 
+            log.temperature > settings.temp_max || 
+            log.temperature < settings.temp_min || 
+            log.humidity > settings.humid_max || 
+            log.humidity < settings.humid_min
+          )
+          .map(log => ({
+            ...log,
+            status: (log.temperature > settings.temp_max || log.temperature < settings.temp_min) && 
+                    (log.humidity > settings.humid_max || log.humidity < settings.humid_min)
+              ? 'both_high' 
+              : (log.temperature > settings.temp_max || log.temperature < settings.temp_min)
+                ? 'temperature_high' 
+                : 'humidity_high'
+          } as AlertLogType))
+          .sort((a, b) => new Date(b.recorded_at).getTime() - new Date(a.recorded_at).getTime());
+        setAlertLogs(alerts);
+      }
+
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    }
+  }, [timeRange, customFilter, sensorNames, settings.temp_max, settings.temp_min, settings.humid_max, settings.humid_min]);
+
+  useEffect(() => {
     fetchData();
 
     // ตั้งค่า Polling เป็น fallback (ทุกๆ 15 วินาที)
@@ -272,28 +271,36 @@ export default function App() {
           });
           setLastUpdated(new Date());
 
-          // อัพเดทข้อมูลกราฟ
-          setChartData(prev => {
-            const newData = [...prev, log1, log2];
-            // เก็บข้อมูลไว้แค่ 200 รายการล่าสุด (100 จุดเวลา x 2 เซนเซอร์)
-            if (newData.length > 200) return newData.slice(newData.length - 200);
-            return newData;
-          });
+          // อัพเดทข้อมูลกราฟ (เฉพาะเมื่อเป็น Real-time)
+          if (timeRange === 'realtime') {
+            setChartData(prev => {
+              const newData = [...prev, log1, log2];
+              // เก็บข้อมูลไว้แค่ 200 รายการล่าสุด (100 จุดเวลา x 2 เซนเซอร์)
+              if (newData.length > 200) return newData.slice(newData.length - 200);
+              return newData;
+            });
 
-          // ตรวจสอบและเพิ่ม Alert ถ้าค่าผิดปกติ
-          [log1, log2].forEach(log => {
-            if (log.temperature > settings.temp_max || log.humidity > settings.humid_max) {
-              const newAlert: AlertLogType = {
-                ...log,
-                status: log.temperature > settings.temp_max && log.humidity > settings.humid_max 
-                  ? 'both_high' 
-                  : log.temperature > settings.temp_max 
-                    ? 'temperature_high' 
-                    : 'humidity_high'
-              };
-              setAlertLogs(prev => [newAlert, ...prev].slice(0, 50));
-            }
-          });
+            // ตรวจสอบและเพิ่ม Alert ถ้าค่าผิดปกติ
+            [log1, log2].forEach(log => {
+              if (
+                log.temperature > settings.temp_max || 
+                log.temperature < settings.temp_min || 
+                log.humidity > settings.humid_max || 
+                log.humidity < settings.humid_min
+              ) {
+                const newAlert: AlertLogType = {
+                  ...log,
+                  status: (log.temperature > settings.temp_max || log.temperature < settings.temp_min) && 
+                          (log.humidity > settings.humid_max || log.humidity < settings.humid_min)
+                    ? 'both_high' 
+                    : (log.temperature > settings.temp_max || log.temperature < settings.temp_min)
+                      ? 'temperature_high' 
+                      : 'humidity_high'
+                };
+                setAlertLogs(prev => [newAlert, ...prev].slice(0, 50));
+              }
+            });
+          }
         }
       )
       .subscribe();
@@ -302,7 +309,7 @@ export default function App() {
       clearInterval(pollInterval);
       subscription.unsubscribe();
     };
-  }, []);
+  }, [fetchData, sensorNames, settings.temp_max, settings.temp_min, settings.humid_max, settings.humid_min, timeRange]);
 
   // คำนวณสถานะรวมของระบบ
   const systemStatus = useMemo(() => {
