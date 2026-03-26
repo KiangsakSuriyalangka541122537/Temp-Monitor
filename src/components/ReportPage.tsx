@@ -29,6 +29,7 @@ export function ReportPage({ sensorNames, thresholds, onBack }: ReportPageProps)
   });
   const [logs, setLogs] = useState<SensorLog[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   const fetchReportData = useCallback(async () => {
@@ -109,50 +110,103 @@ export function ReportPage({ sensorNames, thresholds, onBack }: ReportPageProps)
     ).length
   };
 
-  const exportPDF = () => {
-    const doc = new jsPDF();
-    
-    // Add title
-    doc.setFontSize(20);
-    doc.text('Server Monitor Report', 14, 22);
-    
-    // Add info
-    doc.setFontSize(11);
-    doc.text(`Report Type: ${range.toUpperCase()}`, 14, 32);
-    doc.text(`Period: ${range === 'custom' ? `${customRange.start} to ${customRange.end}` : format(selectedDate, range === 'day' ? 'dd MMMM yyyy' : range === 'month' ? 'MMMM yyyy' : 'yyyy')}`, 14, 38);
-    doc.text(`Generated at: ${format(new Date(), 'dd/MM/yyyy HH:mm:ss')}`, 14, 44);
+  const exportPDF = async () => {
+    setIsExporting(true);
+    try {
+      const doc = new jsPDF();
+      
+      // Fetch Thai Font (THSarabunNew) to support Thai characters in PDF
+      // Using a reliable source for THSarabunNew which is known to work well with jsPDF
+      const fontUrl = 'https://raw.githubusercontent.com/Phonbopit/sarabun-webfont/master/fonts/thsarabunnew-webfont.ttf';
+      const response = await fetch(fontUrl);
+      const buffer = await response.arrayBuffer();
+      const bytes = new Uint8Array(buffer);
+      let binary = '';
+      for (let i = 0; i < bytes.byteLength; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      const base64Font = btoa(binary);
 
-    // Add summary
-    doc.text('Summary:', 14, 54);
-    doc.text(`- Average Temperature: ${stats.avgTemp.toFixed(1)}°C`, 14, 60);
-    doc.text(`- Average Humidity: ${stats.avgHumid.toFixed(1)}%`, 14, 66);
-    doc.text(`- Total Alerts: ${stats.totalAlerts}`, 14, 72);
+      doc.addFileToVFS('THSarabunNew.ttf', base64Font);
+      doc.addFont('THSarabunNew.ttf', 'THSarabunNew', 'normal');
+      doc.setFont('THSarabunNew');
+      
+      // --- Draw PDF Content (Minimalist & Thai) ---
+      
+      // Title
+      doc.setFontSize(16);
+      doc.setTextColor(30, 30, 30);
+      doc.text('รายงานสรุปผลอุณหภูมิและความชื้น', 14, 20);
+      
+      // Period Info
+      doc.setFontSize(10);
+      doc.setTextColor(100, 100, 100);
+      const periodText = range === 'custom' 
+        ? `ข้อมูลระหว่างวันที่: ${format(new Date(customRange.start), 'dd/MM/yyyy')} ถึง ${format(new Date(customRange.end), 'dd/MM/yyyy')}` 
+        : `ข้อมูลประจำวันที่: ${format(selectedDate, range === 'day' ? 'dd/MM/yyyy' : range === 'month' ? 'MM/yyyy' : 'yyyy')}`;
+      doc.text(periodText, 14, 28);
 
-    // Add table
-    const tableData = filteredLogs.map(log => {
-      const isNormal = log.temperature <= thresholds.tempMax && 
-                       log.temperature >= thresholds.tempMin && 
-                       log.humidity <= thresholds.humidMax && 
-                       log.humidity >= thresholds.humidMin;
-      return [
-        format(new Date(log.recorded_at), 'dd/MM/yyyy HH:mm:ss'),
-        log.sensor_name,
-        `${log.temperature.toFixed(1)}°C`,
-        `${log.humidity.toFixed(1)}%`,
-        isNormal ? 'Normal' : 'Abnormal'
-      ];
-    });
+      // Summary
+      doc.setFontSize(10);
+      doc.setTextColor(60, 60, 60);
+      doc.text(`อุณหภูมิเฉลี่ย: ${stats.avgTemp.toFixed(1)} °C   |   ความชื้นเฉลี่ย: ${stats.avgHumid.toFixed(1)} %   |   พบความผิดปกติ: ${stats.totalAlerts} ครั้ง`, 14, 34);
 
-    autoTable(doc, {
-      startY: 80,
-      head: [['Date/Time', 'Sensor', 'Temp', 'Humid', 'Status']],
-      body: tableData,
-      theme: 'grid',
-      headStyles: { fillColor: [41, 128, 185], textColor: 255 },
-      alternateRowStyles: { fillColor: [245, 245, 245] }
-    });
+      // Table Data
+      const tableData = filteredLogs.map(log => {
+        const isNormal = log.temperature <= thresholds.tempMax && 
+                         log.temperature >= thresholds.tempMin && 
+                         log.humidity <= thresholds.humidMax && 
+                         log.humidity >= thresholds.humidMin;
+        return [
+          format(new Date(log.recorded_at), 'dd/MM/yyyy HH:mm'),
+          log.sensor_name,
+          `${log.temperature.toFixed(1)} °C`,
+          `${log.humidity.toFixed(1)} %`,
+          isNormal ? 'ปกติ' : 'ผิดปกติ'
+        ];
+      });
 
-    doc.save(`report-${format(new Date(), 'yyyyMMdd-HHmmss')}.pdf`);
+      // Draw Table
+      autoTable(doc, {
+        startY: 40,
+        head: [['วัน/เวลา', 'จุดติดตั้ง (เซนเซอร์)', 'อุณหภูมิ', 'ความชื้น', 'สถานะ']],
+        body: tableData,
+        theme: 'grid',
+        styles: {
+          font: 'THSarabunNew',
+          fontSize: 12, // Increased slightly because THSarabunNew is smaller than standard fonts
+          textColor: [60, 60, 60],
+          lineColor: [230, 230, 230],
+          lineWidth: 0.1,
+          cellPadding: 3,
+        },
+        headStyles: {
+          fillColor: [245, 245, 245],
+          textColor: [40, 40, 40],
+          fontStyle: 'normal', // Explicitly set to normal since we only loaded the normal font
+        },
+        alternateRowStyles: {
+          fillColor: [252, 252, 252]
+        },
+        didParseCell: function(data) {
+          // Colorize status column
+          if (data.section === 'body' && data.column.index === 4) {
+            if (data.cell.raw === 'ผิดปกติ') {
+              data.cell.styles.textColor = [220, 38, 38]; // Red
+            } else {
+              data.cell.styles.textColor = [5, 150, 105]; // Green
+            }
+          }
+        }
+      });
+
+      doc.save(`รายงานอุณหภูมิ_${format(new Date(), 'yyyyMMdd_HHmm')}.pdf`);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alert('เกิดข้อผิดพลาดในการสร้าง PDF กรุณาลองใหม่อีกครั้ง');
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const changeDate = (amount: number) => {
@@ -188,11 +242,15 @@ export function ReportPage({ sensorNames, thresholds, onBack }: ReportPageProps)
         
         <button 
           onClick={exportPDF}
-          disabled={logs.length === 0}
+          disabled={logs.length === 0 || isExporting}
           className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-medium transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <Download className="w-5 h-5" />
-          ส่งออก PDF Report
+          {isExporting ? (
+            <Activity className="w-5 h-5 animate-spin-slow" />
+          ) : (
+            <Download className="w-5 h-5" />
+          )}
+          {isExporting ? 'กำลังสร้าง PDF...' : 'ส่งออก PDF Report'}
         </button>
       </div>
 
