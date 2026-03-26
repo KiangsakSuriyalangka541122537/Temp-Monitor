@@ -29,8 +29,36 @@ export default function App() {
     localStorage.setItem('sensorNames', JSON.stringify(sensorNames));
   }, [sensorNames]);
 
-  const handleNameChange = (id: number, newName: string) => {
-    setSensorNames(prev => ({ ...prev, [id]: newName }));
+  const handleNameChange = async (id: number, newName: string) => {
+    const updatedNames = { ...sensorNames, [id]: newName };
+    setSensorNames(updatedNames);
+    
+    // บันทึกชื่อลง LocalStorage ทันทีเป็นระบบสำรอง
+    localStorage.setItem('sensorNames', JSON.stringify(updatedNames));
+    
+    try {
+      // พยายามบันทึกลง Supabase เพื่อซิงค์ข้ามเครื่อง
+      const { error } = await supabase
+        .from('device_settings')
+        .update({ 
+          sensor_names: updatedNames,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', 1);
+        
+      if (error) {
+        console.warn('Supabase sync failed, using local storage only:', error.message);
+        // ไม่ต้องแจ้ง Error ตัวใหญ่ให้ผู้ใช้ตกใจ เพราะเรามี LocalStorage สำรองไว้แล้ว
+        // แต่ถ้าต้องการให้ผู้ใช้ทราบว่าซิงค์ไม่ได้ สามารถเปิด toast ได้
+      } else {
+        toast.success('บันทึกชื่อเซนเซอร์เรียบร้อยแล้ว', {
+          description: `เปลี่ยนชื่อเป็น "${newName}" และซิงค์ข้อมูลแล้ว`,
+          duration: 2000
+        });
+      }
+    } catch (err) {
+      console.error('Unexpected error during name save:', err);
+    }
   };
   const [timeRange, setTimeRange] = useState<'realtime' | '24h' | '7d' | '30d' | 'custom'>('realtime');
   const [customFilter, setCustomFilter] = useState({
@@ -52,7 +80,7 @@ export default function App() {
   const [isSavingSettings, setIsSavingSettings] = useState(false);
 
   // ดึงค่าตั้งค่าจาก Supabase
-  const fetchSettings = async () => {
+  const fetchSettings = useCallback(async () => {
     const { data, error } = await supabase
       .from('device_settings')
       .select('*')
@@ -67,8 +95,11 @@ export default function App() {
         humid_max: data.humid_max,
         notify_interval: data.notify_interval
       });
+      if (data.sensor_names) {
+        setSensorNames(data.sensor_names);
+      }
     }
-  };
+  }, []);
 
   const saveSettings = async () => {
     setIsSavingSettings(true);
@@ -80,6 +111,7 @@ export default function App() {
         humid_min: settings.humid_min,
         humid_max: settings.humid_max,
         notify_interval: settings.notify_interval,
+        sensor_names: sensorNames,
         updated_at: new Date().toISOString()
       })
       .eq('id', 1);
@@ -87,7 +119,7 @@ export default function App() {
     if (!error) {
       setShowSettings(false);
       toast.success('บันทึกการตั้งค่าเรียบร้อยแล้ว', {
-        description: 'เกณฑ์การแจ้งเตือนถูกอัปเดตแล้ว',
+        description: 'เกณฑ์การแจ้งเตือนและชื่อเซนเซอร์ถูกอัปเดตแล้ว',
         icon: <Check className="w-4 h-4 text-emerald-500" />,
       });
     } else {
@@ -230,13 +262,17 @@ export default function App() {
   }, [timeRange, customFilter, sensorNames, settings.temp_max, settings.temp_min, settings.humid_max, settings.humid_min]);
 
   useEffect(() => {
+    fetchSettings();
     fetchData();
 
     // ตั้งค่า Polling เป็น fallback (ทุกๆ 15 วินาที)
-    const pollInterval = setInterval(fetchData, 15000);
+    const pollInterval = setInterval(() => {
+      fetchData();
+      fetchSettings();
+    }, 15000);
 
-    // ตั้งค่า Supabase Realtime Subscription
-    const subscription = supabase
+    // ตั้งค่า Supabase Realtime Subscription สำหรับข้อมูลเซนเซอร์
+    const sensorSubscription = supabase
       .channel('Temp-sketch_mar24a_changes')
       .on(
         'postgres_changes',
@@ -305,11 +341,34 @@ export default function App() {
       )
       .subscribe();
 
+    // ตั้งค่า Supabase Realtime Subscription สำหรับการตั้งค่า (รวมถึงชื่อเซนเซอร์)
+    const settingsSubscription = supabase
+      .channel('device_settings_changes')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'device_settings', filter: 'id=eq.1' },
+        (payload) => {
+          const newData = payload.new;
+          setSettings({
+            temp_min: newData.temp_min,
+            temp_max: newData.temp_max,
+            humid_min: newData.humid_min,
+            humid_max: newData.humid_max,
+            notify_interval: newData.notify_interval
+          });
+          if (newData.sensor_names) {
+            setSensorNames(newData.sensor_names);
+          }
+        }
+      )
+      .subscribe();
+
     return () => {
       clearInterval(pollInterval);
-      subscription.unsubscribe();
+      sensorSubscription.unsubscribe();
+      settingsSubscription.unsubscribe();
     };
-  }, [fetchData, sensorNames, settings.temp_max, settings.temp_min, settings.humid_max, settings.humid_min, timeRange]);
+  }, [fetchData, fetchSettings, sensorNames, settings.temp_max, settings.temp_min, settings.humid_max, settings.humid_min, timeRange]);
 
   // คำนวณสถานะรวมของระบบ
   const systemStatus = useMemo(() => {
