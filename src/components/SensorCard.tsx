@@ -43,22 +43,23 @@ export function SensorCard({ data, sensorName, onNameChange, thresholds }: Senso
   }
 
   const lastSeen = new Date(data.recorded_at).getTime();
-  const isOffline = (Date.now() - lastSeen) / (1000 * 60) > 5;
+  const isOffline = (Date.now() - lastSeen) / (1000 * 60) > 6;
+  const isSensorError = data.temperature === -999 || data.humidity === -999;
 
   const isTempHigh = data.temperature > thresholds.tempMax;
   const isTempLow = data.temperature < thresholds.tempMin;
   const isHumidHigh = data.humidity > thresholds.humidMax;
   const isHumidLow = data.humidity < thresholds.humidMin;
   
-  const isTempIssue = isTempHigh || isTempLow;
-  const isHumidIssue = isHumidHigh || isHumidLow;
-  const isNormal = !isTempIssue && !isHumidIssue && !isOffline;
+  const isTempIssue = !isSensorError && (isTempHigh || isTempLow);
+  const isHumidIssue = !isSensorError && (isHumidHigh || isHumidLow);
+  const isNormal = !isTempIssue && !isHumidIssue && !isOffline && !isSensorError;
 
   return (
     <div
       className={cn(
         "relative flex flex-col p-1.5 sm:p-3 rounded-xl sm:rounded-3xl border transition-colors duration-300 shadow-sm",
-        isOffline
+        isOffline || isSensorError
           ? "bg-zinc-50 dark:bg-zinc-900/20 border-zinc-200 dark:border-zinc-800/50 grayscale"
           : isTempIssue && isHumidIssue
           ? "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900/50"
@@ -93,7 +94,9 @@ export function SensorCard({ data, sensorName, onNameChange, thresholds }: Senso
         ) : (
           <div className="flex items-center gap-1.5 overflow-hidden">
             <h3 className="text-zinc-500 dark:text-zinc-400 font-medium text-[9px] sm:text-[11px] truncate">
-              {sensorName} {isOffline && <span className="text-zinc-400 ml-1">(Offline)</span>}
+              {sensorName} 
+              {isOffline && <span className="text-zinc-400 ml-1">(ออฟไลน์)</span>}
+              {!isOffline && isSensorError && <span className="text-red-500 ml-1">(เซนเซอร์มีปัญหา)</span>}
             </h3>
             <button 
               onClick={() => setIsEditing(true)}
@@ -107,9 +110,10 @@ export function SensorCard({ data, sensorName, onNameChange, thresholds }: Senso
         {!isEditing && (
           <div className="flex gap-1 shrink-0">
             {isOffline && <Activity className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-zinc-400 animate-pulse" />}
+            {isSensorError && !isOffline && <TriangleAlert className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-500 animate-pulse" />}
             {isNormal && <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-500" />}
-            {!isOffline && isTempIssue && <TriangleAlert className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-500" />}
-            {!isOffline && isHumidIssue && <Droplets className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-orange-500" />}
+            {!isOffline && !isSensorError && isTempIssue && <TriangleAlert className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-500" />}
+            {!isOffline && !isSensorError && isHumidIssue && <Droplets className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-orange-500" />}
           </div>
         )}
       </div>
@@ -117,21 +121,21 @@ export function SensorCard({ data, sensorName, onNameChange, thresholds }: Senso
       <div className="flex items-baseline gap-1 mb-1 sm:mb-2">
         <span className={cn(
           "text-lg sm:text-3xl font-light tracking-tight",
-          isOffline ? "text-zinc-400" : isTempIssue ? "text-red-600 dark:text-red-400" : "text-zinc-900 dark:text-zinc-100"
+          isOffline || isSensorError ? "text-zinc-400 text-base sm:text-xl" : isTempIssue ? "text-red-600 dark:text-red-400" : "text-zinc-900 dark:text-zinc-100"
         )}>
-          {data.temperature.toFixed(1)}
+          {isSensorError ? "ERR" : data.temperature.toFixed(1)}
         </span>
-        <span className="text-zinc-400 dark:text-zinc-500 text-sm sm:text-xl font-light">°C</span>
+        {!isSensorError && <span className="text-zinc-400 dark:text-zinc-500 text-sm sm:text-xl font-light">°C</span>}
       </div>
 
       <div className="flex items-center gap-1 text-[8px] sm:text-[11px] pt-1.5 sm:pt-3 border-t border-zinc-100 dark:border-zinc-800/50 justify-between">
         <div className="flex items-center gap-0.5 sm:gap-1">
-          <Droplets className={cn("w-2.5 h-2.5 sm:w-3.5 sm:h-3.5", isHumidIssue ? "text-orange-500" : "text-zinc-400 dark:text-zinc-500")} />
+          <Droplets className={cn("w-2.5 h-2.5 sm:w-3.5 sm:h-3.5", isHumidIssue && !isSensorError ? "text-orange-500" : "text-zinc-400 dark:text-zinc-500")} />
           <span className={cn(
             "font-medium",
-            isHumidIssue ? "text-orange-600 dark:text-orange-400" : "text-zinc-600 dark:text-zinc-400"
+            isHumidIssue && !isSensorError ? "text-orange-600 dark:text-orange-400" : "text-zinc-600 dark:text-zinc-400"
           )}>
-            {data.humidity.toFixed(0)}%
+            {isSensorError ? "--" : data.humidity.toFixed(0)}%
           </span>
         </div>
         <span className="text-[8px] sm:text-[10px] text-zinc-400 dark:text-zinc-500 font-mono">

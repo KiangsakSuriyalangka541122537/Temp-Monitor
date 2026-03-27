@@ -141,7 +141,9 @@ export function ReportPage({ sensorNames, thresholds, onBack }: ReportPageProps)
 
   const filteredLogs = useMemo(() => {
     return displayLogs.filter(log => {
-      const isNormal = log.temperature <= thresholds.tempMax && 
+      const isSensorError = log.temperature === -999 || log.humidity === -999;
+      const isNormal = !isSensorError && 
+                       log.temperature <= thresholds.tempMax && 
                        log.temperature >= thresholds.tempMin && 
                        log.humidity <= thresholds.humidMax && 
                        log.humidity >= thresholds.humidMin;
@@ -157,16 +159,21 @@ export function ReportPage({ sensorNames, thresholds, onBack }: ReportPageProps)
     });
   }, [displayLogs, thresholds, searchQuery, statusFilter]);
 
-  const stats = useMemo(() => ({
-    avgTemp: logs.length > 0 ? logs.reduce((acc, curr) => acc + curr.temperature, 0) / logs.length : 0,
-    avgHumid: logs.length > 0 ? logs.reduce((acc, curr) => acc + curr.humidity, 0) / logs.length : 0,
-    totalAlerts: logs.filter(log => 
-      log.temperature > thresholds.tempMax || 
-      log.temperature < thresholds.tempMin || 
-      log.humidity > thresholds.humidMax || 
-      log.humidity < thresholds.humidMin
-    ).length
-  }), [logs, thresholds]);
+  const stats = useMemo(() => {
+    const validLogs = logs.filter(l => l.temperature !== -999 && l.humidity !== -999);
+    return {
+      avgTemp: validLogs.length > 0 ? validLogs.reduce((acc, curr) => acc + curr.temperature, 0) / validLogs.length : 0,
+      avgHumid: validLogs.length > 0 ? validLogs.reduce((acc, curr) => acc + curr.humidity, 0) / validLogs.length : 0,
+      totalAlerts: logs.filter(log => 
+        log.temperature === -999 || 
+        log.humidity === -999 ||
+        log.temperature > thresholds.tempMax || 
+        log.temperature < thresholds.tempMin || 
+        log.humidity > thresholds.humidMax || 
+        log.humidity < thresholds.humidMin
+      ).length
+    };
+  }, [logs, thresholds]);
 
   const exportPDF = async () => {
     setIsExporting(true);
@@ -222,7 +229,9 @@ export function ReportPage({ sensorNames, thresholds, onBack }: ReportPageProps)
 
       // Filter by status
       const finalExportLogs = exportLogs.filter(log => {
-        const isNormal = log.temperature <= thresholds.tempMax && 
+        const isSensorError = log.temperature === -999 || log.humidity === -999;
+        const isNormal = !isSensorError && 
+                         log.temperature <= thresholds.tempMax && 
                          log.temperature >= thresholds.tempMin && 
                          log.humidity <= thresholds.humidMax && 
                          log.humidity >= thresholds.humidMin;
@@ -239,10 +248,13 @@ export function ReportPage({ sensorNames, thresholds, onBack }: ReportPageProps)
       }
 
       // Calculate stats for export
+      const validExportLogs = finalExportLogs.filter(l => l.temperature !== -999 && l.humidity !== -999);
       const exportStats = {
-        avgTemp: finalExportLogs.reduce((acc, curr) => acc + curr.temperature, 0) / finalExportLogs.length,
-        avgHumid: finalExportLogs.reduce((acc, curr) => acc + curr.humidity, 0) / finalExportLogs.length,
+        avgTemp: validExportLogs.length > 0 ? validExportLogs.reduce((acc, curr) => acc + curr.temperature, 0) / validExportLogs.length : 0,
+        avgHumid: validExportLogs.length > 0 ? validExportLogs.reduce((acc, curr) => acc + curr.humidity, 0) / validExportLogs.length : 0,
         totalAlerts: finalExportLogs.filter(log => 
+          log.temperature === -999 || 
+          log.humidity === -999 ||
           log.temperature > thresholds.tempMax || 
           log.temperature < thresholds.tempMin || 
           log.humidity > thresholds.humidMax || 
@@ -292,16 +304,18 @@ export function ReportPage({ sensorNames, thresholds, onBack }: ReportPageProps)
 
       // Table Data
       const tableData = finalExportLogs.map(log => {
-        const isNormal = log.temperature <= thresholds.tempMax && 
+        const isSensorError = log.temperature === -999 || log.humidity === -999;
+        const isNormal = !isSensorError && 
+                         log.temperature <= thresholds.tempMax && 
                          log.temperature >= thresholds.tempMin && 
                          log.humidity <= thresholds.humidMax && 
                          log.humidity >= thresholds.humidMin;
         return [
           format(new Date(log.recorded_at), 'dd/MM/yyyy HH:mm'),
           log.sensor_name,
-          `${log.temperature.toFixed(1)} °C`,
-          `${log.humidity.toFixed(1)} %`,
-          isNormal ? 'ปกติ' : 'ผิดปกติ'
+          log.temperature === -999 ? 'ERR' : `${log.temperature.toFixed(1)} °C`,
+          log.humidity === -999 ? 'ERR' : `${log.humidity.toFixed(1)} %`,
+          isSensorError ? 'เซนเซอร์มีปัญหา' : (isNormal ? 'ปกติ' : 'ผิดปกติ')
         ];
       });
 
@@ -330,7 +344,7 @@ export function ReportPage({ sensorNames, thresholds, onBack }: ReportPageProps)
         didParseCell: function(data) {
           // Colorize status column
           if (data.section === 'body' && data.column.index === 4) {
-            if (data.cell.raw === 'ผิดปกติ') {
+            if (data.cell.raw === 'ผิดปกติ' || data.cell.raw === 'เซนเซอร์มีปัญหา') {
               data.cell.styles.textColor = [220, 38, 38]; // Red
             } else {
               data.cell.styles.textColor = [5, 150, 105]; // Green
@@ -532,7 +546,9 @@ export function ReportPage({ sensorNames, thresholds, onBack }: ReportPageProps)
                 </tr>
               ) : (
                 filteredLogs.map((log) => {
-                  const isNormal = log.temperature <= thresholds.tempMax && 
+                  const isSensorError = log.temperature === -999 || log.humidity === -999;
+                  const isNormal = !isSensorError && 
+                                   log.temperature <= thresholds.tempMax && 
                                    log.temperature >= thresholds.tempMin && 
                                    log.humidity <= thresholds.humidMax && 
                                    log.humidity >= thresholds.humidMin;
@@ -551,20 +567,20 @@ export function ReportPage({ sensorNames, thresholds, onBack }: ReportPageProps)
                       </td>
                       <td className="px-6 py-4">
                         <span className={`text-sm font-mono ${
-                          log.temperature > thresholds.tempMax || log.temperature < thresholds.tempMin 
+                          log.temperature === -999 || log.temperature > thresholds.tempMax || log.temperature < thresholds.tempMin 
                             ? 'text-red-500 font-bold' 
                             : 'text-zinc-900 dark:text-zinc-100'
                         }`}>
-                          {log.temperature.toFixed(1)}°C
+                          {log.temperature === -999 ? 'ERR' : `${log.temperature.toFixed(1)}°C`}
                         </span>
                       </td>
                       <td className="px-6 py-4">
                         <span className={`text-sm font-mono ${
-                          log.humidity > thresholds.humidMax || log.humidity < thresholds.humidMin 
+                          log.humidity === -999 || log.humidity > thresholds.humidMax || log.humidity < thresholds.humidMin 
                             ? 'text-red-500 font-bold' 
                             : 'text-zinc-900 dark:text-zinc-100'
                         }`}>
-                          {log.humidity.toFixed(1)}%
+                          {log.humidity === -999 ? 'ERR' : `${log.humidity.toFixed(1)}%`}
                         </span>
                       </td>
                       <td className="px-6 py-4">
@@ -574,7 +590,7 @@ export function ReportPage({ sensorNames, thresholds, onBack }: ReportPageProps)
                             : 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'
                         }`}>
                           {isNormal ? <CheckCircle2 className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
-                          {isNormal ? 'ปกติ' : 'ผิดปกติ'}
+                          {isSensorError ? 'เซนเซอร์มีปัญหา' : (isNormal ? 'ปกติ' : 'ผิดปกติ')}
                         </div>
                       </td>
                     </tr>

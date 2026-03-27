@@ -66,30 +66,39 @@ export function AlertLog({
                           <div className="flex items-center justify-center sm:justify-start gap-1">
                             <span className="sm:hidden text-[7px] text-zinc-400 font-bold uppercase">อุณหภูมิ</span>
                             <span className={isTempIssue ? 'text-red-600 dark:text-red-400 font-bold' : 'text-zinc-500 dark:text-zinc-500'}>
-                              {log.temperature.toFixed(1)}°
+                              {log.temperature === -999 ? 'ERR' : `${log.temperature.toFixed(1)}°`}
                             </span>
                           </div>
                           <div className="flex items-center justify-center sm:justify-start gap-1">
                             <span className="sm:hidden text-[7px] text-zinc-400 font-bold uppercase">ความชื้น</span>
                             <span className={isHumidIssue ? 'text-orange-600 dark:text-orange-400 font-bold' : 'text-zinc-500 dark:text-zinc-500'}>
-                              {log.humidity.toFixed(0)}%
+                              {log.humidity === -999 ? 'ERR' : `${log.humidity.toFixed(0)}%`}
                             </span>
                           </div>
                         </div>
                       </td>
                       <td className="px-1 sm:px-6 py-2 sm:py-4">
                         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-1">
-                          {isTempIssue && (
+                          {log.temperature === -999 || log.humidity === -999 ? (
                             <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 border border-red-100 dark:border-red-500/20 text-[7px] sm:text-[11px]">
                               <TriangleAlert className="w-2 h-2 sm:w-3 sm:h-3" />
-                              <span>อุณหภูมิ</span>
+                              <span>เซนเซอร์มีปัญหา</span>
                             </span>
-                          )}
-                          {isHumidIssue && (
-                            <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded bg-orange-50 dark:bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-100 dark:border-orange-500/20 text-[7px] sm:text-[11px]">
-                              <Droplets className="w-2 h-2 sm:w-3 sm:h-3" />
-                              <span>ความชื้น</span>
-                            </span>
+                          ) : (
+                            <>
+                              {isTempIssue && (
+                                <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 border border-red-100 dark:border-red-500/20 text-[7px] sm:text-[11px]">
+                                  <TriangleAlert className="w-2 h-2 sm:w-3 sm:h-3" />
+                                  <span>อุณหภูมิ</span>
+                                </span>
+                              )}
+                              {isHumidIssue && (
+                                <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded bg-orange-50 dark:bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-100 dark:border-orange-500/20 text-[7px] sm:text-[11px]">
+                                  <Droplets className="w-2 h-2 sm:w-3 sm:h-3" />
+                                  <span>ความชื้น</span>
+                                </span>
+                              )}
+                            </>
                           )}
                         </div>
                       </td>

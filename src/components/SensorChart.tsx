@@ -113,8 +113,8 @@ export function SensorChart({
 
       for (let i = 0; i < timestamps.length; i++) {
         const log = dataMap.get(`${sId}-${timestamps[i]}`);
-        tempData[i] = log ? log.temperature : null;
-        humidData[i] = log ? log.humidity : null;
+        tempData[i] = log && log.temperature !== -999 ? log.temperature : null;
+        humidData[i] = log && log.humidity !== -999 ? log.humidity : null;
       }
 
       datasets.push({

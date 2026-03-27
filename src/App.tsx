@@ -387,8 +387,12 @@ export default function App() {
                     lastNotifiedRef.current = { ...lastNotifiedRef.current, [log.sensor_id]: now };
                     const sensorName = currentSensorNames[log.sensor_id] || log.sensor_name;
                     let message = `⚠️ แจ้งเตือน: ${sensorName}\n`;
-                    if (isTempIssue) message += `🌡️ อุณหภูมิ: ${log.temperature.toFixed(1)}°C (ปกติ ${tempMin}-${tempMax})\n`;
-                    if (isHumidIssue) message += `💧 ความชื้น: ${log.humidity.toFixed(0)}% (ปกติ ${humidMin}-${humidMax})\n`;
+                    if (log.temperature === -999 || log.humidity === -999) {
+                      message += `❌ เซนเซอร์ขัดข้อง (Sensor Error)\n`;
+                    } else {
+                      if (isTempIssue) message += `🌡️ อุณหภูมิ: ${log.temperature.toFixed(1)}°C (ปกติ ${tempMin}-${tempMax})\n`;
+                      if (isHumidIssue) message += `💧 ความชื้น: ${log.humidity.toFixed(0)}% (ปกติ ${humidMin}-${humidMax})\n`;
+                    }
                     message += `⏰ เวลา: ${format(new Date(log.recorded_at), 'HH:mm:ss')}`;
 
                     try {
