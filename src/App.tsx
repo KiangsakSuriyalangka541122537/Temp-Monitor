@@ -370,7 +370,7 @@ export default function App() {
         if (now - lastOfflineNotifiedRef.current > intervalMs) {
           lastOfflineNotifiedRef.current = now;
           offlineNotificationCountRef.current += 1;
-          const message = `🔴 แจ้งเตือน: ระบบขาดการเชื่อมต่อ (Offline)\n❌ ไม่ได้รับข้อมูลจากเซนเซอร์เกิน 10 นาที\n⏰ เวลา: ${format(new Date(), 'HH:mm:ss')}`;
+          const message = `🔴 แจ้งเตือน: ระบบขาดการเชื่อมต่อ (Offline)\n📌 ปัญหา: ขาดการส่งข้อมูลจากอุปกรณ์\n🔍 สาเหตุ: อาจเกิดจาก WiFi หลุด หรือไฟดับ (ไม่ได้รับข้อมูลเกิน 10 นาที)\n⏰ เวลา: ${format(new Date(), 'HH:mm:ss')}`;
           
           try {
             await fetch('/api/line/push', {
@@ -471,8 +471,10 @@ export default function App() {
                     const sensorName = currentSensorNames[log.sensor_id] || log.sensor_name;
                     let message = `⚠️ แจ้งเตือน: ${sensorName}\n`;
                     if (isError) {
-                      message += `❌ เซนเซอร์ขัดข้อง (Sensor Error)\n`;
+                      message += `📌 ปัญหา: เซนเซอร์ขัดข้อง (Sensor Error)\n`;
+                      message += `🔍 สาเหตุ: ไม่สามารถอ่านค่าจากเซนเซอร์ได้ (ตรวจสอบสายสัญญาณ)\n`;
                     } else {
+                      message += `📌 ปัญหา: ค่าเกินเกณฑ์ที่กำหนด\n`;
                       if (isTempIssue) message += `🌡️ อุณหภูมิ: ${log.temperature.toFixed(1)}°C (ปกติ ${tempMin}-${tempMax})\n`;
                       if (isHumidIssue) message += `💧 ความชื้น: ${log.humidity.toFixed(0)}% (ปกติ ${humidMin}-${humidMax})\n`;
                     }
