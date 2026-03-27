@@ -14,5 +14,5 @@ export interface AlertLog {
   temperature: number;
   humidity: number;
   recorded_at: string;
-  status: 'temperature_high' | 'humidity_high' | 'both_high';
+  status: 'temperature_high' | 'humidity_high' | 'both_high' | 'error';
 }

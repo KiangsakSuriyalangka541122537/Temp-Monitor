@@ -169,7 +169,9 @@ export default function App() {
 
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const lastNotifiedRef = useRef<Record<number, number>>({});
+  const notificationCountsRef = useRef<Record<string, number>>({});
   const lastOfflineNotifiedRef = useRef<number>(0);
+  const offlineNotificationCountRef = useRef<number>(0);
 
   // จัดการการเปลี่ยน Theme
   useEffect(() => {
@@ -352,10 +354,22 @@ export default function App() {
       // ถ้าไม่มีข้อมูลใหม่เกิน 10 นาที และยังไม่ได้แจ้งเตือนในช่วงเวลาที่กำหนด
       if (diffMinutes > 10) {
         const now = Date.now();
-        const intervalMs = (Number(currentSettings.notify_interval) || 10) * 60 * 1000;
+        const count = offlineNotificationCountRef.current;
+        let intervalMinutes = 10;
+
+        if (count === 0) {
+          intervalMinutes = 0; // เตือนทันทีที่พบว่า Offline เกิน 10 นาที
+        } else if (count === 1) {
+          intervalMinutes = 5; // ครั้งที่สองห่าง 5 นาที
+        } else {
+          intervalMinutes = Number(currentSettings.notify_interval) || 10;
+        }
+
+        const intervalMs = intervalMinutes * 60 * 1000;
         
         if (now - lastOfflineNotifiedRef.current > intervalMs) {
           lastOfflineNotifiedRef.current = now;
+          offlineNotificationCountRef.current += 1;
           const message = `🔴 แจ้งเตือน: ระบบขาดการเชื่อมต่อ (Offline)\n❌ ไม่ได้รับข้อมูลจากเซนเซอร์เกิน 10 นาที\n⏰ เวลา: ${format(new Date(), 'HH:mm:ss')}`;
           
           try {
@@ -370,6 +384,9 @@ export default function App() {
             });
           } catch (err) { console.error('Offline notification error:', err); }
         }
+      } else {
+        // ถ้าข้อมูลกลับมาปกติ ให้รีเซ็ตตัวนับ Offline
+        offlineNotificationCountRef.current = 0;
       }
     }, 60000);
 
@@ -421,24 +438,39 @@ export default function App() {
 
               const isTempIssue = log.temperature > tempMax || log.temperature < tempMin;
               const isHumidIssue = log.humidity > humidMax || log.humidity < humidMin;
+              const isError = log.temperature === -999 || log.humidity === -999;
+              const problemKey = `sensor_${log.sensor_id}`;
 
-              if (isTempIssue || isHumidIssue) {
+              if (isTempIssue || isHumidIssue || isError) {
                 const newAlert: AlertLogType = {
                   ...log,
-                  status: isTempIssue && isHumidIssue ? 'both_high' : isTempIssue ? 'temperature_high' : 'humidity_high'
+                  status: isError ? 'error' : (isTempIssue && isHumidIssue ? 'both_high' : isTempIssue ? 'temperature_high' : 'humidity_high')
                 };
                 setAlertLogs(prev => [newAlert, ...prev].slice(0, 50));
 
                 if (currentSettings.line_access_token && currentSettings.line_user_id) {
                   const now = Date.now();
                   const lastTime = lastNotifiedRef.current[log.sensor_id] || 0;
-                  const intervalMs = (Number(currentSettings.notify_interval) || 10) * 60 * 1000;
+                  const count = notificationCountsRef.current[problemKey] || 0;
+                  
+                  let intervalMinutes = 10;
+                  if (count === 0) {
+                    intervalMinutes = 0; // เตือนทันทีครั้งแรก
+                  } else if (count === 1) {
+                    intervalMinutes = 5; // ครั้งที่สองห่าง 5 นาที
+                  } else {
+                    intervalMinutes = Number(currentSettings.notify_interval) || 10;
+                  }
+
+                  const intervalMs = intervalMinutes * 60 * 1000;
 
                   if (now - lastTime > intervalMs) {
                     lastNotifiedRef.current = { ...lastNotifiedRef.current, [log.sensor_id]: now };
+                    notificationCountsRef.current[problemKey] = count + 1;
+                    
                     const sensorName = currentSensorNames[log.sensor_id] || log.sensor_name;
                     let message = `⚠️ แจ้งเตือน: ${sensorName}\n`;
-                    if (log.temperature === -999 || log.humidity === -999) {
+                    if (isError) {
                       message += `❌ เซนเซอร์ขัดข้อง (Sensor Error)\n`;
                     } else {
                       if (isTempIssue) message += `🌡️ อุณหภูมิ: ${log.temperature.toFixed(1)}°C (ปกติ ${tempMin}-${tempMax})\n`;
@@ -459,6 +491,9 @@ export default function App() {
                     } catch (err) { console.error('LINE error:', err); }
                   }
                 }
+              } else {
+                // ข้อมูลปกติ ให้รีเซ็ตตัวนับ
+                notificationCountsRef.current[problemKey] = 0;
               }
             });
           }
