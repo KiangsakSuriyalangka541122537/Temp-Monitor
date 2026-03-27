@@ -237,18 +237,18 @@ export default function App() {
 
       const { data: history, error: historyError } = await query
         .order('created_at', { ascending: false })
-        .limit(timeRange === 'realtime' ? 100 : 1000);
+        .limit(1000); // เพิ่มเป็น 1000 รายการเสมอเพื่อให้ Alert Log มีข้อมูลย้อนหลังเพียงพอ
 
       if (!historyError && history) {
         const mappedHistory: SensorLog[] = [];
         history.forEach((log: any) => {
           // เพิ่มข้อมูลเซนเซอร์ 1
           mappedHistory.push({
-            id: log.id * 2, // สร้าง id จำลองให้ไม่ซ้ำ
+            id: log.id * 2,
             sensor_id: 1,
             sensor_name: sensorNames[1] || 'เซนเซอร์ 1',
-            temperature: log.t1 || 0,
-            humidity: log.h1 || 0,
+            temperature: Number(log.t1) || 0,
+            humidity: Number(log.h1) || 0,
             recorded_at: log.created_at
           });
           // เพิ่มข้อมูลเซนเซอร์ 2
@@ -256,32 +256,33 @@ export default function App() {
             id: log.id * 2 + 1,
             sensor_id: 2,
             sensor_name: sensorNames[2] || 'เซนเซอร์ 2',
-            temperature: log.t2 || 0,
-            humidity: log.h2 || 0,
+            temperature: Number(log.t2) || 0,
+            humidity: Number(log.h2) || 0,
             recorded_at: log.created_at
           });
         });
-        setChartData(mappedHistory.reverse());
         
-        // กรองข้อมูลที่ผิดปกติมาแสดงใน Alert Log
+        // กรองข้อมูลที่ผิดปกติมาแสดงใน Alert Log ก่อนจะ reverse สำหรับกราฟ
         const alerts = mappedHistory
           .filter(log => 
-            log.temperature > settings.temp_max || 
-            log.temperature < settings.temp_min || 
-            log.humidity > settings.humid_max || 
-            log.humidity < settings.humid_min
+            log.temperature > Number(settings.temp_max) || 
+            log.temperature < Number(settings.temp_min) || 
+            log.humidity > Number(settings.humid_max) || 
+            log.humidity < Number(settings.humid_min)
           )
           .map(log => ({
             ...log,
-            status: (log.temperature > settings.temp_max || log.temperature < settings.temp_min) && 
-                    (log.humidity > settings.humid_max || log.humidity < settings.humid_min)
+            status: (log.temperature > Number(settings.temp_max) || log.temperature < Number(settings.temp_min)) && 
+                    (log.humidity > Number(settings.humid_max) || log.humidity < Number(settings.humid_min))
               ? 'both_high' 
-              : (log.temperature > settings.temp_max || log.temperature < settings.temp_min)
+              : (log.temperature > Number(settings.temp_max) || log.temperature < Number(settings.temp_min))
                 ? 'temperature_high' 
                 : 'humidity_high'
           } as AlertLogType))
           .sort((a, b) => new Date(b.recorded_at).getTime() - new Date(a.recorded_at).getTime());
+        
         setAlertLogs(alerts);
+        setChartData(mappedHistory.reverse());
       }
 
     } catch (error) {
@@ -349,8 +350,13 @@ export default function App() {
 
             // ตรวจสอบและเพิ่ม Alert ถ้าค่าผิดปกติ
             [log1, log2].forEach(async (log) => {
-              const isTempIssue = log.temperature > settings.temp_max || log.temperature < settings.temp_min;
-              const isHumidIssue = log.humidity > settings.humid_max || log.humidity < settings.humid_min;
+              const tempMax = Number(settings.temp_max);
+              const tempMin = Number(settings.temp_min);
+              const humidMax = Number(settings.humid_max);
+              const humidMin = Number(settings.humid_min);
+
+              const isTempIssue = log.temperature > tempMax || log.temperature < tempMin;
+              const isHumidIssue = log.humidity > humidMax || log.humidity < humidMin;
 
               if (isTempIssue || isHumidIssue) {
                 const newAlert: AlertLogType = {
@@ -367,15 +373,15 @@ export default function App() {
                 if (settings.line_access_token && settings.line_user_id) {
                   const now = Date.now();
                   const lastTime = lastNotifiedRef.current[log.sensor_id] || 0;
-                  const intervalMs = (settings.notify_interval || 10) * 60 * 1000;
+                  const intervalMs = (Number(settings.notify_interval) || 10) * 60 * 1000;
 
                   if (now - lastTime > intervalMs) {
                     lastNotifiedRef.current = { ...lastNotifiedRef.current, [log.sensor_id]: now };
                     
                     const sensorName = sensorNames[log.sensor_id] || log.sensor_name;
                     let message = `⚠️ แจ้งเตือน: ${sensorName}\n`;
-                    if (isTempIssue) message += `🌡️ อุณหภูมิ: ${log.temperature.toFixed(1)}°C (ปกติ ${settings.temp_min}-${settings.temp_max})\n`;
-                    if (isHumidIssue) message += `💧 ความชื้น: ${log.humidity.toFixed(0)}% (ปกติ ${settings.humid_min}-${settings.humid_max})\n`;
+                    if (isTempIssue) message += `🌡️ อุณหภูมิ: ${log.temperature.toFixed(1)}°C (ปกติ ${tempMin}-${tempMax})\n`;
+                    if (isHumidIssue) message += `💧 ความชื้น: ${log.humidity.toFixed(0)}% (ปกติ ${humidMin}-${humidMax})\n`;
                     message += `⏰ เวลา: ${format(new Date(log.recorded_at), 'HH:mm:ss')}`;
 
                     try {
@@ -446,7 +452,7 @@ export default function App() {
       sensorSubscription.unsubscribe();
       settingsSubscription.unsubscribe();
     };
-  }, [fetchData, fetchSettings, sensorNames, settings.temp_max, settings.temp_min, settings.humid_max, settings.humid_min, timeRange]);
+  }, [fetchData, fetchSettings, sensorNames, settings.temp_max, settings.temp_min, settings.humid_max, settings.humid_min, settings.line_access_token, settings.line_user_id, settings.notify_interval, timeRange]);
 
   // คำนวณสถานะรวมของระบบ
   const systemStatus = useMemo(() => {
