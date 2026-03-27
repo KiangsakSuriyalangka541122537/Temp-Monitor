@@ -379,7 +379,7 @@ export default function App() {
                     message += `⏰ เวลา: ${format(new Date(log.recorded_at), 'HH:mm:ss')}`;
 
                     try {
-                      await fetch('/api/line/push', {
+                      const response = await fetch('/api/line/push', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -388,6 +388,10 @@ export default function App() {
                           messages: [{ type: 'text', text: message }]
                         })
                       });
+                      if (!response.ok) {
+                        const text = await response.text();
+                        console.error('Auto LINE notification failed:', response.status, text);
+                      }
                     } catch (err) {
                       console.error('Failed to send auto LINE notification:', err);
                     }
@@ -782,12 +786,25 @@ export default function App() {
                                     messages: [{ type: 'text', text: '🔔 ทดสอบการแจ้งเตือนจากระบบ Server Monitor (Messaging API)' }]
                                   })
                                 });
-                                  const data = await response.json();
-                                  if (response.ok) toast.success('ส่งข้อความทดสอบเรียบร้อย');
-                                  else toast.error(`ส่งไม่สำเร็จ: ${data.message || 'ตรวจสอบ Token/ID'}`);
-                                } catch (e) {
-                                  toast.error('เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์');
+                                
+                                if (!response.ok) {
+                                  const text = await response.text();
+                                  console.error('Server error response:', response.status, text);
+                                  let errorMsg = 'ตรวจสอบ Token/ID';
+                                  try {
+                                    const errData = JSON.parse(text);
+                                    if (errData.message) errorMsg = errData.message;
+                                  } catch (e) {}
+                                  toast.error(`ส่งไม่สำเร็จ: ${errorMsg}`);
+                                  return;
                                 }
+
+                                await response.json();
+                                toast.success('ส่งข้อความทดสอบเรียบร้อย');
+                              } catch (e) {
+                                console.error('LINE test error:', e);
+                                toast.error('เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์');
+                              }
                             }}
                             className="text-[10px] bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-2 py-1 rounded-lg hover:bg-blue-200 transition-colors"
                           >
