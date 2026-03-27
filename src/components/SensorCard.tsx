@@ -57,7 +57,7 @@ export function SensorCard({ data, sensorName, onNameChange, thresholds }: Senso
   return (
     <div
       className={cn(
-        "relative flex flex-col p-2 sm:p-3 rounded-2xl sm:rounded-3xl border transition-colors duration-300 shadow-sm",
+        "relative flex flex-col p-1.5 sm:p-3 rounded-xl sm:rounded-3xl border transition-colors duration-300 shadow-sm",
         isOffline
           ? "bg-zinc-50 dark:bg-zinc-900/20 border-zinc-200 dark:border-zinc-800/50 grayscale"
           : isTempIssue && isHumidIssue
@@ -116,17 +116,17 @@ export function SensorCard({ data, sensorName, onNameChange, thresholds }: Senso
 
       <div className="flex items-baseline gap-1 mb-1 sm:mb-2">
         <span className={cn(
-          "text-xl sm:text-3xl font-light tracking-tight",
+          "text-lg sm:text-3xl font-light tracking-tight",
           isOffline ? "text-zinc-400" : isTempIssue ? "text-red-600 dark:text-red-400" : "text-zinc-900 dark:text-zinc-100"
         )}>
           {data.temperature.toFixed(1)}
         </span>
-        <span className="text-zinc-400 dark:text-zinc-500 text-base sm:text-xl font-light">°C</span>
+        <span className="text-zinc-400 dark:text-zinc-500 text-sm sm:text-xl font-light">°C</span>
       </div>
 
-      <div className="flex items-center gap-1.5 text-[9px] sm:text-[11px] pt-2 sm:pt-3 border-t border-zinc-100 dark:border-zinc-800/50 justify-between">
-        <div className="flex items-center gap-1">
-          <Droplets className={cn("w-3 h-3 sm:w-3.5 sm:h-3.5", isHumidIssue ? "text-orange-500" : "text-zinc-400 dark:text-zinc-500")} />
+      <div className="flex items-center gap-1 text-[8px] sm:text-[11px] pt-1.5 sm:pt-3 border-t border-zinc-100 dark:border-zinc-800/50 justify-between">
+        <div className="flex items-center gap-0.5 sm:gap-1">
+          <Droplets className={cn("w-2.5 h-2.5 sm:w-3.5 sm:h-3.5", isHumidIssue ? "text-orange-500" : "text-zinc-400 dark:text-zinc-500")} />
           <span className={cn(
             "font-medium",
             isHumidIssue ? "text-orange-600 dark:text-orange-400" : "text-zinc-600 dark:text-zinc-400"
@@ -134,7 +134,7 @@ export function SensorCard({ data, sensorName, onNameChange, thresholds }: Senso
             {data.humidity.toFixed(0)}%
           </span>
         </div>
-        <span className="text-[9px] sm:text-[10px] text-zinc-400 dark:text-zinc-500 font-mono">
+        <span className="text-[8px] sm:text-[10px] text-zinc-400 dark:text-zinc-500 font-mono">
           {new Date(data.recorded_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </span>
       </div>

@@ -109,7 +109,7 @@ export function SensorChart({
         borderColor: colorSet.temp,
         backgroundColor: `${colorSet.temp}1a`,
         fill: false,
-        tension: 0.4,
+        tension: 0.6,
         pointRadius: 0,
         pointHoverRadius: 4,
         borderWidth: 2,
@@ -123,7 +123,7 @@ export function SensorChart({
         borderColor: colorSet.humid,
         backgroundColor: `${colorSet.humid}1a`,
         fill: false,
-        tension: 0.4,
+        tension: 0.6,
         pointRadius: 0,
         pointHoverRadius: 4,
         borderWidth: 2,
@@ -234,8 +234,11 @@ export function SensorChart({
           color: isDark ? '#52525b' : '#a1a1aa',
           font: {
             size: 10
-          }
-        }
+          },
+          stepSize: 5
+        },
+        min: 15,
+        max: isMobile ? 38 : 42
       },
       'y-humidity': {
         type: 'linear' as const,
@@ -258,10 +261,11 @@ export function SensorChart({
           color: isDark ? '#52525b' : '#a1a1aa',
           font: {
             size: 10
-          }
+          },
+          stepSize: 20
         },
         min: 0,
-        max: 100
+        max: isMobile ? 120 : 150
       }
     }
   };
@@ -269,8 +273,8 @@ export function SensorChart({
   return (
     <div className="flex flex-col gap-2 sm:gap-3 lg:h-full">
       {/* Header & Controls */}
-      <div className="bg-white dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800/80 rounded-2xl sm:rounded-3xl p-2 sm:p-3 shadow-sm">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+      <div className="bg-white dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800/80 rounded-2xl sm:rounded-3xl p-1.5 sm:p-3 shadow-sm">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-3">
           <h2 className="text-sm sm:text-base font-medium text-zinc-900 dark:text-zinc-100">แนวโน้มอุณหภูมิและความชื้นแบบ Real-time</h2>
           
           <div className="flex bg-zinc-100 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800/80 rounded-2xl p-1 shadow-inner w-full sm:w-auto overflow-x-auto no-scrollbar">
@@ -348,25 +352,25 @@ export function SensorChart({
 
       {/* Chart Canvas Container */}
       <div className="bg-white dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800/80 rounded-2xl sm:rounded-3xl flex flex-col shadow-sm flex-1 lg:min-h-0 overflow-hidden">
-        <div className="flex-1 w-full min-h-[300px] lg:min-h-0 p-4 sm:p-6">
+        <div className="flex-1 w-full min-h-[280px] lg:min-h-0 p-2 sm:p-6">
           <Line data={chartData} options={options} />
         </div>
 
         {/* Custom Legend - Mobile Only */}
-        <div className="sm:hidden grid grid-cols-2 gap-2 p-3 border-t border-zinc-100 dark:border-zinc-800/50 bg-zinc-50/50 dark:bg-zinc-900/20">
+        <div className="sm:hidden grid grid-cols-2 gap-1.5 p-2 border-t border-zinc-100 dark:border-zinc-800/50 bg-zinc-50/50 dark:bg-zinc-900/20">
           {sensorsList.map((sensor) => (
-            <div key={sensor.id} className="flex flex-col gap-1 p-2 bg-white dark:bg-zinc-900/40 rounded-xl border border-zinc-100 dark:border-zinc-800/50 shadow-sm">
-              <span className="text-[10px] font-bold text-zinc-900 dark:text-zinc-100 truncate">
+            <div key={sensor.id} className="flex flex-col gap-0.5 p-1.5 bg-white dark:bg-zinc-900/40 rounded-lg border border-zinc-100 dark:border-zinc-800/50 shadow-sm">
+              <span className="text-[9px] font-bold text-zinc-900 dark:text-zinc-100 truncate">
                 {sensor.name}
               </span>
-              <div className="grid grid-cols-1 gap-0.5">
-                <div className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: sensor.colors.temp }} />
-                  <span className="text-[9px] text-zinc-500 dark:text-zinc-400 whitespace-nowrap">อุณหภูมิ (°C)</span>
+              <div className="grid grid-cols-1 gap-0">
+                <div className="flex items-center gap-1">
+                  <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: sensor.colors.temp }} />
+                  <span className="text-[8px] text-zinc-500 dark:text-zinc-400 whitespace-nowrap">อุณหภูมิ (°C)</span>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: sensor.colors.humid }} />
-                  <span className="text-[9px] text-zinc-500 dark:text-zinc-400 whitespace-nowrap">ความชื้น (%)</span>
+                <div className="flex items-center gap-1">
+                  <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: sensor.colors.humid }} />
+                  <span className="text-[8px] text-zinc-500 dark:text-zinc-400 whitespace-nowrap">ความชื้น (%)</span>
                 </div>
               </div>
             </div>
