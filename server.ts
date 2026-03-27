@@ -28,23 +28,28 @@ async function startServer() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
+          Authorization: `Bearer ${accessToken.trim()}`,
         },
-        body: JSON.stringify({ to, messages }),
+        body: JSON.stringify({ to: to.trim(), messages }),
       });
 
-      const data = await response.json();
+      let data;
+      const text = await response.text();
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        data = { message: text || `HTTP Error ${response.status}` };
+      }
 
       if (response.ok) {
         res.json(data);
       } else {
-        // Log detailed error for debugging
         console.error("LINE API Error:", JSON.stringify(data));
         res.status(response.status).json(data);
       }
     } catch (error) {
       console.error("Error proxying to LINE API:", error);
-      res.status(500).json({ error: "Internal Server Error" });
+      res.status(500).json({ message: error instanceof Error ? error.message : "Internal Server Error" });
     }
   });
 

@@ -793,7 +793,12 @@ export default function App() {
                                   let errorMsg = 'ตรวจสอบ Token/ID';
                                   try {
                                     const errData = JSON.parse(text);
-                                    if (errData.message) errorMsg = errData.message;
+                                    if (errData.message) {
+                                      errorMsg = errData.message;
+                                    }
+                                    if (errData.details && Array.isArray(errData.details)) {
+                                      errorMsg += ' (' + errData.details.map((d: any) => `${d.property}: ${d.message}`).join(', ') + ')';
+                                    }
                                   } catch (e) {}
                                   toast.error(`ส่งไม่สำเร็จ: ${errorMsg}`);
                                   return;
