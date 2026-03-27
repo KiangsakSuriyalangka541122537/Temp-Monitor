@@ -795,6 +795,8 @@ export default function App() {
                                     const errData = JSON.parse(text);
                                     if (errData.message) {
                                       errorMsg = errData.message;
+                                    } else if (errData.error) {
+                                      errorMsg = errData.error;
                                     }
                                     if (errData.details && Array.isArray(errData.details)) {
                                       errorMsg += ' (' + errData.details.map((d: any) => `${d.property}: ${d.message}`).join(', ') + ')';
