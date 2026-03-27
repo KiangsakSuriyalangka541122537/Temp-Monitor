@@ -38,6 +38,8 @@ async function startServer() {
       if (response.ok) {
         res.json(data);
       } else {
+        // Log detailed error for debugging
+        console.error("LINE API Error:", JSON.stringify(data));
         res.status(response.status).json(data);
       }
     } catch (error) {

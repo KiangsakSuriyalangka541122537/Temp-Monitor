@@ -782,11 +782,12 @@ export default function App() {
                                     messages: [{ type: 'text', text: '🔔 ทดสอบการแจ้งเตือนจากระบบ Server Monitor (Messaging API)' }]
                                   })
                                 });
-                                if (response.ok) toast.success('ส่งข้อความทดสอบเรียบร้อย');
-                                else toast.error('ส่งไม่สำเร็จ ตรวจสอบ Token/ID');
-                              } catch (e) {
-                                toast.error('เกิดข้อผิดพลาดในการส่ง');
-                              }
+                                  const data = await response.json();
+                                  if (response.ok) toast.success('ส่งข้อความทดสอบเรียบร้อย');
+                                  else toast.error(`ส่งไม่สำเร็จ: ${data.message || 'ตรวจสอบ Token/ID'}`);
+                                } catch (e) {
+                                  toast.error('เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์');
+                                }
                             }}
                             className="text-[10px] bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-2 py-1 rounded-lg hover:bg-blue-200 transition-colors"
                           >
@@ -815,6 +816,7 @@ export default function App() {
                             onChange={(e) => setSettings(prev => ({...prev, line_user_id: e.target.value}))}
                             className="w-full bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 rounded-xl p-3 text-xs outline-none focus:ring-2 focus:ring-blue-500/50"
                           />
+                          <p className="text-[9px] text-zinc-400 mt-1 italic">* ต้องเพิ่ม Bot เป็นเพื่อนก่อนจึงจะรับข้อความได้</p>
                         </div>
                       </div>
                       <p className="text-[10px] text-zinc-400">ตั้งค่าได้ที่ LINE Developers Console</p>
