@@ -16,6 +16,16 @@ import { ReportPage } from './components/ReportPage';
 import { SensorLog, AlertLog as AlertLogType } from './types';
 
 export default function App() {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [loginPassword, setLoginPassword] = useState('');
+  const loginInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!isLoggedIn && loginInputRef.current) {
+      loginInputRef.current.focus();
+    }
+  }, [isLoggedIn]);
+
   const [currentTime, setCurrentTime] = useState(new Date());
   const [view, setView] = useState<'dashboard' | 'report'>('dashboard');
   const [latestData, setLatestData] = useState<Record<number, SensorLog>>({});
@@ -488,6 +498,80 @@ export default function App() {
     
     return { type: 'normal', sensors: [] };
   }, [latestData, currentTime, settings, sensorNames]);
+
+  if (!isLoggedIn) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4 selection:bg-blue-500/30">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-zinc-900 border border-zinc-800 p-8 rounded-3xl w-full max-w-md shadow-2xl relative overflow-hidden"
+        >
+          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-600 to-emerald-500"></div>
+          
+          <div className="flex flex-col items-center mb-10">
+            <div className="bg-blue-500/10 p-5 rounded-2xl mb-5 ring-1 ring-blue-500/20">
+              <Activity className="w-12 h-12 text-blue-500" />
+            </div>
+            <h1 className="text-2xl font-bold text-white tracking-tight">ESP32 Sensor Monitor</h1>
+            <p className="text-zinc-500 text-sm mt-2 font-medium">กรุณาเข้าสู่ระบบเพื่อใช้งานระบบเฝ้าระวัง</p>
+          </div>
+          
+          <div className="space-y-6">
+            <div className="space-y-2.5">
+              <div className="flex justify-between items-center ml-1">
+                <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">รหัสผ่านเข้าใช้งาน</label>
+              </div>
+              <div className="relative group">
+                <input 
+                  ref={loginInputRef}
+                  type="password"
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      if (loginPassword === '1234') {
+                        setIsLoggedIn(true);
+                        toast.success('เข้าสู่ระบบสำเร็จ');
+                      } else {
+                        toast.error('รหัสผ่านไม่ถูกต้อง');
+                        setLoginPassword('');
+                        loginInputRef.current?.focus();
+                      }
+                    }
+                  }}
+                  className="w-full bg-zinc-800/50 border border-zinc-700 rounded-2xl p-4 text-white outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all placeholder:text-zinc-600 font-mono tracking-widest"
+                  placeholder="••••••••"
+                />
+              </div>
+            </div>
+            
+            <button 
+              onClick={() => {
+                if (loginPassword === '1234') {
+                  setIsLoggedIn(true);
+                  toast.success('เข้าสู่ระบบสำเร็จ');
+                } else {
+                  toast.error('รหัสผ่านไม่ถูกต้อง');
+                  setLoginPassword('');
+                  loginInputRef.current?.focus();
+                }
+              }}
+              className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-2xl transition-all shadow-lg shadow-blue-900/20 active:scale-[0.98] flex items-center justify-center gap-2"
+            >
+              เข้าสู่ระบบ
+              <CheckCircle2 className="w-5 h-5" />
+            </button>
+            
+            <div className="pt-4 border-t border-zinc-800/50 flex justify-center">
+              <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-bold">Secure Access Control v1.0</p>
+            </div>
+          </div>
+        </motion.div>
+        <Toaster position="top-center" richColors theme="dark" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-[#09090b] text-zinc-900 dark:text-zinc-100 font-sans selection:bg-zinc-200 dark:selection:bg-zinc-800 transition-colors duration-300">
