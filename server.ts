@@ -15,6 +15,11 @@ async function startServer() {
 
   app.use(express.json());
 
+  // Health check route
+  app.get("/api/health", (req, res) => {
+    res.json({ status: "ok", environment: process.env.NODE_ENV || "development" });
+  });
+
   // Proxy route for LINE Messaging API to avoid CORS issues
   app.post("/api/line/push", async (req, res) => {
     console.log("Received POST request to /api/line/push");
