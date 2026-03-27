@@ -24,6 +24,7 @@ async function startServer() {
     }
 
     try {
+      console.log(`Attempting to send LINE push message to: ${to.substring(0, 10)}...`);
       const response = await fetch("https://api.line.me/v2/bot/message/push", {
         method: "POST",
         headers: {
@@ -33,8 +34,8 @@ async function startServer() {
         body: JSON.stringify({ to: to.trim(), messages }),
       });
 
-      let data;
       const text = await response.text();
+      let data;
       try {
         data = JSON.parse(text);
       } catch (e) {
@@ -42,9 +43,19 @@ async function startServer() {
       }
 
       if (response.ok) {
+        console.log("LINE message sent successfully");
         res.json(data);
       } else {
-        console.error("LINE API Error:", JSON.stringify(data));
+        console.error("LINE API Error Status:", response.status);
+        console.error("LINE API Error Body:", text);
+        
+        // Ensure we always have a message to return
+        if (!data.message && data.error_description) {
+          data.message = data.error_description;
+        } else if (!data.message) {
+          data.message = `LINE API Error ${response.status}: ${text.substring(0, 100)}`;
+        }
+        
         res.status(response.status).json(data);
       }
     } catch (error) {

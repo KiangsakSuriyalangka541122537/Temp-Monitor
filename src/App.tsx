@@ -83,8 +83,8 @@ export default function App() {
     humid_min: 30.0,
     humid_max: 80.0,
     notify_interval: 10,
-    line_access_token: 'L450Ii1WvMvG7TDnQpP9ytpXq2FgjcPW488f+DV8AS0Ma6zoQXNiUf0LVBqvtWoS4Ftd62gr5JPQzXAcu+ypuxlC4QM1E0l1hDp2cqayWf6EumvBtPmcB1/cD7MAQBO3o5iayJWv6HOsduRc547RuwdB04t89/1O/w1cDnyilFU=',
-    line_user_id: 'Ua36e33071aed1a4de990b282dde7ad0d'
+    line_access_token: '',
+    line_user_id: ''
   });
   const [isSavingSettings, setIsSavingSettings] = useState(false);
 
@@ -103,8 +103,8 @@ export default function App() {
         humid_min: data.humid_min,
         humid_max: data.humid_max,
         notify_interval: data.notify_interval,
-        line_access_token: data.line_access_token || 'L450Ii1WvMvG7TDnQpP9ytpXq2FgjcPW488f+DV8AS0Ma6zoQXNiUf0LVBqvtWoS4Ftd62gr5JPQzXAcu+ypuxlC4QM1E0l1hDp2cqayWf6EumvBtPmcB1/cD7MAQBO3o5iayJWv6HOsduRc547RuwdB04t89/1O/w1cDnyilFU=',
-        line_user_id: data.line_user_id || 'Ua36e33071aed1a4de990b282dde7ad0d'
+        line_access_token: data.line_access_token || '',
+        line_user_id: data.line_user_id || ''
       };
       
       setSettings(prev => {
@@ -429,8 +429,8 @@ export default function App() {
               humid_min: newData.humid_min,
               humid_max: newData.humid_max,
               notify_interval: newData.notify_interval,
-              line_access_token: newData.line_access_token || 'L450Ii1WvMvG7TDnQpP9ytpXq2FgjcPW488f+DV8AS0Ma6zoQXNiUf0LVBqvtWoS4Ftd62gr5JPQzXAcu+ypuxlC4QM1E0l1hDp2cqayWf6EumvBtPmcB1/cD7MAQBO3o5iayJWv6HOsduRc547RuwdB04t89/1O/w1cDnyilFU=',
-              line_user_id: newData.line_user_id || 'Ua36e33071aed1a4de990b282dde7ad0d'
+              line_access_token: newData.line_access_token || '',
+              line_user_id: newData.line_user_id || ''
             });
           }
           if (newData.sensor_names) {
@@ -775,6 +775,11 @@ export default function App() {
                         {settings.line_access_token && settings.line_user_id && (
                           <button 
                             onClick={async () => {
+                              if (!settings.line_access_token || !settings.line_user_id) {
+                                toast.error('กรุณากรอก Token และ User ID');
+                                return;
+                              }
+                              
                               try {
                                 const response = await fetch('/api/line/push', {
                                   method: 'POST',
@@ -791,18 +796,24 @@ export default function App() {
                                 if (!response.ok) {
                                   const text = await response.text();
                                   console.error('Server error response:', response.status, text);
-                                  let errorMsg = 'ตรวจสอบ Token/ID';
+                                  let errorMsg = `Error ${response.status}`;
                                   try {
                                     const errData = JSON.parse(text);
                                     if (errData.message) {
                                       errorMsg = errData.message;
                                     } else if (errData.error) {
                                       errorMsg = errData.error;
+                                    } else if (errData.error_description) {
+                                      errorMsg = errData.error_description;
                                     }
+                                    
                                     if (errData.details && Array.isArray(errData.details)) {
-                                      errorMsg += ' (' + errData.details.map((d: any) => `${d.property}: ${d.message}`).join(', ') + ')';
+                                      const details = errData.details.map((d: any) => `${d.property ? d.property + ': ' : ''}${d.message}`).join(', ');
+                                      errorMsg += ` (${details})`;
                                     }
-                                  } catch (e) {}
+                                  } catch (e) {
+                                    errorMsg = text || `HTTP ${response.status}`;
+                                  }
                                   toast.error(`ส่งไม่สำเร็จ: ${errorMsg}`);
                                   return;
                                 }
@@ -841,7 +852,7 @@ export default function App() {
                             onChange={(e) => setSettings(prev => ({...prev, line_user_id: e.target.value}))}
                             className="w-full bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 rounded-xl p-3 text-xs outline-none focus:ring-2 focus:ring-blue-500/50"
                           />
-                          <p className="text-[9px] text-zinc-400 mt-1 italic">* ต้องเพิ่ม Bot เป็นเพื่อนก่อนจึงจะรับข้อความได้</p>
+                          <p className="text-[9px] text-zinc-400 mt-1 italic">* ต้องเพิ่ม Bot เป็นเพื่อนก่อนจึงจะรับข้อความได้ และต้องใช้ User ID จาก LINE Developers Console (ไม่ใช่ LINE ID)</p>
                         </div>
                       </div>
                       <p className="text-[10px] text-zinc-400">ตั้งค่าได้ที่ LINE Developers Console</p>
