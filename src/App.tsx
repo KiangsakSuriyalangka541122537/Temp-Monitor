@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { format } from 'date-fns';
 import { Sun, Moon, CheckCircle2, AlertTriangle, Activity, Settings, X, Check, FileText } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -158,6 +158,7 @@ export default function App() {
   };
 
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const lastNotifiedRef = useRef<Record<number, number>>({});
 
   // จัดการการเปลี่ยน Theme
   useEffect(() => {
@@ -347,23 +348,51 @@ export default function App() {
             });
 
             // ตรวจสอบและเพิ่ม Alert ถ้าค่าผิดปกติ
-            [log1, log2].forEach(log => {
-              if (
-                log.temperature > settings.temp_max || 
-                log.temperature < settings.temp_min || 
-                log.humidity > settings.humid_max || 
-                log.humidity < settings.humid_min
-              ) {
+            [log1, log2].forEach(async (log) => {
+              const isTempIssue = log.temperature > settings.temp_max || log.temperature < settings.temp_min;
+              const isHumidIssue = log.humidity > settings.humid_max || log.humidity < settings.humid_min;
+
+              if (isTempIssue || isHumidIssue) {
                 const newAlert: AlertLogType = {
                   ...log,
-                  status: (log.temperature > settings.temp_max || log.temperature < settings.temp_min) && 
-                          (log.humidity > settings.humid_max || log.humidity < settings.humid_min)
+                  status: isTempIssue && isHumidIssue
                     ? 'both_high' 
-                    : (log.temperature > settings.temp_max || log.temperature < settings.temp_min)
+                    : isTempIssue
                       ? 'temperature_high' 
                       : 'humidity_high'
                 };
                 setAlertLogs(prev => [newAlert, ...prev].slice(0, 50));
+
+                // ส่ง LINE Notification ถ้าตั้งค่าไว้และถึงเวลาแจ้งเตือน
+                if (settings.line_access_token && settings.line_user_id) {
+                  const now = Date.now();
+                  const lastTime = lastNotifiedRef.current[log.sensor_id] || 0;
+                  const intervalMs = (settings.notify_interval || 10) * 60 * 1000;
+
+                  if (now - lastTime > intervalMs) {
+                    lastNotifiedRef.current = { ...lastNotifiedRef.current, [log.sensor_id]: now };
+                    
+                    const sensorName = sensorNames[log.sensor_id] || log.sensor_name;
+                    let message = `⚠️ แจ้งเตือน: ${sensorName}\n`;
+                    if (isTempIssue) message += `🌡️ อุณหภูมิ: ${log.temperature.toFixed(1)}°C (ปกติ ${settings.temp_min}-${settings.temp_max})\n`;
+                    if (isHumidIssue) message += `💧 ความชื้น: ${log.humidity.toFixed(0)}% (ปกติ ${settings.humid_min}-${settings.humid_max})\n`;
+                    message += `⏰ เวลา: ${format(new Date(log.recorded_at), 'HH:mm:ss')}`;
+
+                    try {
+                      await fetch('/api/line/push', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          to: settings.line_user_id,
+                          accessToken: settings.line_access_token,
+                          messages: [{ type: 'text', text: message }]
+                        })
+                      });
+                    } catch (err) {
+                      console.error('Failed to send auto LINE notification:', err);
+                    }
+                  }
+                }
               }
             });
           }
@@ -742,14 +771,14 @@ export default function App() {
                           <button 
                             onClick={async () => {
                               try {
-                                const response = await fetch('https://api.line.me/v2/bot/message/push', {
+                                const response = await fetch('/api/line/push', {
                                   method: 'POST',
                                   headers: {
                                     'Content-Type': 'application/json',
-                                    'Authorization': `Bearer ${settings.line_access_token}`
                                   },
                                   body: JSON.stringify({
                                     to: settings.line_user_id,
+                                    accessToken: settings.line_access_token,
                                     messages: [{ type: 'text', text: '🔔 ทดสอบการแจ้งเตือนจากระบบ Server Monitor (Messaging API)' }]
                                   })
                                 });
