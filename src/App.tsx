@@ -169,6 +169,7 @@ export default function App() {
 
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const lastNotifiedRef = useRef<Record<number, number>>({});
+  const lastOfflineNotifiedRef = useRef<number>(0);
 
   // จัดการการเปลี่ยน Theme
   useEffect(() => {
@@ -189,10 +190,12 @@ export default function App() {
   const settingsRef = useRef(settings);
   const sensorNamesRef = useRef(sensorNames);
   const timeRangeRef = useRef(timeRange);
+  const latestDataRef = useRef(latestData);
 
   useEffect(() => { settingsRef.current = settings; }, [settings]);
   useEffect(() => { sensorNamesRef.current = sensorNames; }, [sensorNames]);
   useEffect(() => { timeRangeRef.current = timeRange; }, [timeRange]);
+  useEffect(() => { latestDataRef.current = latestData; }, [latestData]);
 
   // ดึงข้อมูลและตั้งค่า Realtime Subscription
   const fetchData = useCallback(async () => {
@@ -332,6 +335,44 @@ export default function App() {
       }
     }, 30000);
 
+    // ตรวจสอบสถานะออฟไลน์ทุกๆ 1 นาที
+    const offlineCheckInterval = setInterval(async () => {
+      const currentSettings = settingsRef.current;
+      const currentLatestData = latestDataRef.current;
+      const currentSensorNames = sensorNamesRef.current;
+
+      if (!currentSettings.line_access_token || !currentSettings.line_user_id) return;
+
+      const sensors = Object.values(currentLatestData) as SensorLog[];
+      if (sensors.length === 0) return;
+
+      const lastSeen = new Date(sensors[0].recorded_at).getTime();
+      const diffMinutes = (Date.now() - lastSeen) / (1000 * 60);
+      
+      // ถ้าไม่มีข้อมูลใหม่เกิน 10 นาที และยังไม่ได้แจ้งเตือนในช่วงเวลาที่กำหนด
+      if (diffMinutes > 10) {
+        const now = Date.now();
+        const intervalMs = (Number(currentSettings.notify_interval) || 10) * 60 * 1000;
+        
+        if (now - lastOfflineNotifiedRef.current > intervalMs) {
+          lastOfflineNotifiedRef.current = now;
+          const message = `🔴 แจ้งเตือน: ระบบขาดการเชื่อมต่อ (Offline)\n❌ ไม่ได้รับข้อมูลจากเซนเซอร์เกิน 10 นาที\n⏰ เวลา: ${format(new Date(), 'HH:mm:ss')}`;
+          
+          try {
+            await fetch('/api/line/push', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                to: currentSettings.line_user_id,
+                accessToken: currentSettings.line_access_token,
+                messages: [{ type: 'text', text: message }]
+              })
+            });
+          } catch (err) { console.error('Offline notification error:', err); }
+        }
+      }
+    }, 60000);
+
     // ตั้งค่า Supabase Realtime Subscription สำหรับข้อมูลเซนเซอร์
     const sensorSubscription = supabase
       .channel('Temp-sketch_mar24a_changes')
@@ -454,6 +495,7 @@ export default function App() {
 
     return () => {
       clearInterval(pollInterval);
+      clearInterval(offlineCheckInterval);
       sensorSubscription.unsubscribe();
       settingsSubscription.unsubscribe();
     };
