@@ -17,6 +17,7 @@ async function startServer() {
 
   // Proxy route for LINE Messaging API to avoid CORS issues
   app.post("/api/line/push", async (req, res) => {
+    console.log("Received POST request to /api/line/push");
     const { to, messages, accessToken } = req.body;
 
     if (!to || !messages || !accessToken) {
