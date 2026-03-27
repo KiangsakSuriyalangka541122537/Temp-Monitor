@@ -83,8 +83,8 @@ export default function App() {
     humid_min: 30.0,
     humid_max: 80.0,
     notify_interval: 10,
-    line_access_token: '',
-    line_user_id: ''
+    line_access_token: 'L450Ii1WvMvG7TDnQpP9ytpXq2FgjcPW488f+DV8AS0Ma6zoQXNiUf0LVBqvtWoS4Ftd62gr5JPQzXAcu+ypuxlC4QM1E0l1hDp2cqayWf6EumvBtPmcB1/cD7MAQBO3o5iayJWv6HOsduRc547RuwdB04t89/1O/w1cDnyilFU=',
+    line_user_id: 'Ua36e33071aed1a4de990b282dde7ad0d'
   });
   const [isSavingSettings, setIsSavingSettings] = useState(false);
 
@@ -103,8 +103,8 @@ export default function App() {
         humid_min: data.humid_min,
         humid_max: data.humid_max,
         notify_interval: data.notify_interval,
-        line_access_token: data.line_access_token || '',
-        line_user_id: data.line_user_id || ''
+        line_access_token: data.line_access_token || 'L450Ii1WvMvG7TDnQpP9ytpXq2FgjcPW488f+DV8AS0Ma6zoQXNiUf0LVBqvtWoS4Ftd62gr5JPQzXAcu+ypuxlC4QM1E0l1hDp2cqayWf6EumvBtPmcB1/cD7MAQBO3o5iayJWv6HOsduRc547RuwdB04t89/1O/w1cDnyilFU=',
+        line_user_id: data.line_user_id || 'Ua36e33071aed1a4de990b282dde7ad0d'
       };
       
       setSettings(prev => {
@@ -422,8 +422,8 @@ export default function App() {
               humid_min: newData.humid_min,
               humid_max: newData.humid_max,
               notify_interval: newData.notify_interval,
-              line_access_token: newData.line_access_token || '',
-              line_user_id: newData.line_user_id || ''
+              line_access_token: newData.line_access_token || 'L450Ii1WvMvG7TDnQpP9ytpXq2FgjcPW488f+DV8AS0Ma6zoQXNiUf0LVBqvtWoS4Ftd62gr5JPQzXAcu+ypuxlC4QM1E0l1hDp2cqayWf6EumvBtPmcB1/cD7MAQBO3o5iayJWv6HOsduRc547RuwdB04t89/1O/w1cDnyilFU=',
+              line_user_id: newData.line_user_id || 'Ua36e33071aed1a4de990b282dde7ad0d'
             });
           }
           
