@@ -82,7 +82,7 @@ export function ReportPage({ sensorNames, thresholds, onBack }: ReportPageProps)
 
       const { data, error } = await supabase
         .from('Temp-sketch_mar24a')
-        .select('*')
+        .select('id, created_at, t1, h1, t2, h2')
         .gte('created_at', startDate)
         .lte('created_at', endDate)
         .order('created_at', { ascending: false });
@@ -90,25 +90,29 @@ export function ReportPage({ sensorNames, thresholds, onBack }: ReportPageProps)
       if (error) throw error;
 
       if (data) {
-        const mappedLogs: SensorLog[] = [];
-        data.forEach((log: any) => {
-          mappedLogs.push({
+        const mappedLogs: SensorLog[] = new Array(data.length * 2);
+        for (let i = 0; i < data.length; i++) {
+          const log = data[i];
+          const baseIdx = i * 2;
+          
+          mappedLogs[baseIdx] = {
             id: log.id * 2,
             sensor_id: 1,
             sensor_name: '', // Will map later
-            temperature: log.t1 || 0,
-            humidity: log.h1 || 0,
+            temperature: Number(log.t1) || 0,
+            humidity: Number(log.h1) || 0,
             recorded_at: log.created_at
-          });
-          mappedLogs.push({
+          };
+          
+          mappedLogs[baseIdx + 1] = {
             id: log.id * 2 + 1,
             sensor_id: 2,
             sensor_name: '', // Will map later
-            temperature: log.t2 || 0,
-            humidity: log.h2 || 0,
-            recorded_at: log.recorded_at || log.created_at
-          });
-        });
+            temperature: Number(log.t2) || 0,
+            humidity: Number(log.h2) || 0,
+            recorded_at: log.created_at
+          };
+        }
         setLogs(mappedLogs);
       }
     } catch (error) {

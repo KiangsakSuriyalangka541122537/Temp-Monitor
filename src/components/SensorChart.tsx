@@ -70,13 +70,29 @@ export function SensorChart({
 
   // Prepare Chart.js data
   const chartData = useMemo(() => {
-    // Sort data by time
+    if (data.length === 0) {
+      return { labels: [], datasets: [] };
+    }
+
+    // Sort data by time (O(N log N))
     const sortedData = [...data].sort((a, b) => new Date(a.recorded_at).getTime() - new Date(b.recorded_at).getTime());
     
-    // Get unique timestamps for labels
-    const timestamps = Array.from(new Set(sortedData.map(log => format(new Date(log.recorded_at), 'HH:mm:ss'))));
+    // Pre-format timestamps to avoid repeated formatting (O(N))
+    const formattedData = sortedData.map(log => ({
+      ...log,
+      formattedTime: format(new Date(log.recorded_at), 'HH:mm:ss')
+    }));
+
+    // Get unique timestamps for labels (O(N))
+    const timestamps = Array.from(new Set(formattedData.map(log => log.formattedTime)));
     
-    // Group data by sensor
+    // Group data by sensor and timestamp for O(1) lookup (O(N))
+    const dataMap = new Map<string, SensorLog>();
+    formattedData.forEach(log => {
+      dataMap.set(`${log.sensor_id}-${log.formattedTime}`, log);
+    });
+
+    // Get unique sensor IDs (O(N))
     const sensors = Array.from(new Set(sortedData.map(log => log.sensor_id)));
     
     const datasets: any[] = [];
@@ -88,20 +104,18 @@ export function SensorChart({
     ];
 
     sensors.forEach((sId, index) => {
-      const sensorData = sortedData.filter(log => log.sensor_id === sId);
-      const sensorName = sensorNames[sId] || sensorData[0]?.sensor_name || `เซนเซอร์ ${sId}`;
+      const sensorName = sensorNames[sId] || `เซนเซอร์ ${sId}`;
       const colorSet = colors[index % colors.length];
 
-      // Map data to the global timestamps to ensure alignment
-      const tempData = timestamps.map(ts => {
-        const log = sensorData.find(l => format(new Date(l.recorded_at), 'HH:mm:ss') === ts);
-        return log ? log.temperature : null;
-      });
+      // Map data to the global timestamps using the map for O(1) lookup
+      const tempData = new Array(timestamps.length);
+      const humidData = new Array(timestamps.length);
 
-      const humidData = timestamps.map(ts => {
-        const log = sensorData.find(l => format(new Date(l.recorded_at), 'HH:mm:ss') === ts);
-        return log ? log.humidity : null;
-      });
+      for (let i = 0; i < timestamps.length; i++) {
+        const log = dataMap.get(`${sId}-${timestamps[i]}`);
+        tempData[i] = log ? log.temperature : null;
+        humidData[i] = log ? log.humidity : null;
+      }
 
       datasets.push({
         label: `${sensorName} - อุณหภูมิ (°C)`,
@@ -109,7 +123,7 @@ export function SensorChart({
         borderColor: colorSet.temp,
         backgroundColor: `${colorSet.temp}1a`,
         fill: false,
-        tension: 0.6,
+        tension: 0.4, // Reduced tension for better performance and look
         pointRadius: 0,
         pointHoverRadius: 4,
         borderWidth: 2,
@@ -123,7 +137,7 @@ export function SensorChart({
         borderColor: colorSet.humid,
         backgroundColor: `${colorSet.humid}1a`,
         fill: false,
-        tension: 0.6,
+        tension: 0.4,
         pointRadius: 0,
         pointHoverRadius: 4,
         borderWidth: 2,
@@ -136,7 +150,7 @@ export function SensorChart({
       labels: timestamps,
       datasets
     };
-  }, [data]);
+  }, [data, sensorNames]);
 
   // Get sensors for custom legend
   const sensorsList = useMemo(() => {

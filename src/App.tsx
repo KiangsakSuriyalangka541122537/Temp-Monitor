@@ -175,36 +175,74 @@ export default function App() {
     return () => clearInterval(timer);
   }, []);
 
+  // Refs สำหรับเก็บค่าล่าสุดเพื่อใช้ใน Realtime Subscription โดยไม่ทำให้ Effect รันใหม่
+  const settingsRef = useRef(settings);
+  const sensorNamesRef = useRef(sensorNames);
+  const timeRangeRef = useRef(timeRange);
+
+  useEffect(() => { settingsRef.current = settings; }, [settings]);
+  useEffect(() => { sensorNamesRef.current = sensorNames; }, [sensorNames]);
+  useEffect(() => { timeRangeRef.current = timeRange; }, [timeRange]);
+
   // ดึงข้อมูลและตั้งค่า Realtime Subscription
   const fetchData = useCallback(async () => {
     try {
-      // ดึงข้อมูลล่าสุดจากตาราง Temp-sketch_mar24a
-      const { data: latest, error: latestError } = await supabase
+      // ดึงข้อมูลล่าสุดและข้อมูลประวัติพร้อมกันเพื่อความรวดเร็ว
+      const latestPromise = supabase
         .from('Temp-sketch_mar24a')
-        .select('*')
+        .select('id, created_at, t1, h1, t2, h2')
         .order('created_at', { ascending: false })
-        .limit(1);
+        .limit(1)
+        .single();
 
-      if (latestError) throw latestError;
+      let historyQuery = supabase
+        .from('Temp-sketch_mar24a')
+        .select('id, created_at, t1, h1, t2, h2');
 
-      if (latest && latest.length > 0) {
+      if (timeRange === 'custom') {
+        const start = new Date(`${customFilter.startDate}T${customFilter.startTime}:00`).toISOString();
+        const end = new Date(`${customFilter.endDate}T${customFilter.endTime}:59`).toISOString();
+        historyQuery = historyQuery.gte('created_at', start).lte('created_at', end);
+      } else if (timeRange === '24h') {
+        const yesterday = new Date();
+        yesterday.setHours(yesterday.getHours() - 24);
+        historyQuery = historyQuery.gte('created_at', yesterday.toISOString());
+      } else if (timeRange === '7d') {
+        const weekAgo = new Date();
+        weekAgo.setDate(weekAgo.getDate() - 7);
+        historyQuery = historyQuery.gte('created_at', weekAgo.toISOString());
+      } else if (timeRange === '30d') {
+        const monthAgo = new Date();
+        monthAgo.setDate(monthAgo.getDate() - 30);
+        historyQuery = historyQuery.gte('created_at', monthAgo.toISOString());
+      }
+
+      // ปรับ Limit ตามช่วงเวลาเพื่อลดปริมาณข้อมูลที่ส่ง
+      const historyLimit = timeRange === 'realtime' ? 200 : 1000;
+      const historyPromise = historyQuery
+        .order('created_at', { ascending: false })
+        .limit(historyLimit);
+
+      const [latestRes, historyRes] = await Promise.all([latestPromise, historyPromise]);
+
+      if (latestRes.data) {
         setIsConnected(true);
-        const log = latest[0];
+        const log = latestRes.data;
         const newLatestData: Record<number, SensorLog> = {
           1: {
             id: log.id,
             sensor_id: 1,
             sensor_name: sensorNames[1] || 'เซนเซอร์ 1',
-            temperature: log.t1 || 0,
-            humidity: log.h1 || 0,
+            temperature: Number(log.t1) || 0,
+            humidity: Number(log.h1) || 0,
             recorded_at: log.created_at
           },
           2: {
             id: log.id,
             sensor_id: 2,
             sensor_name: sensorNames[2] || 'เซนเซอร์ 2',
-            temperature: log.t2 || 0,
-            humidity: log.h2 || 0,
+            temperature: Number(log.t2) || 0,
+            humidity: Number(log.h2) || 0,
             recorded_at: log.created_at
           }
         };
@@ -212,76 +250,58 @@ export default function App() {
         setLastUpdated(new Date());
       }
 
-      // ดึงข้อมูลสำหรับกราฟและ Alert Log
-      let query = supabase
-        .from('Temp-sketch_mar24a')
-        .select('*');
-
-      if (timeRange === 'custom') {
-        const start = new Date(`${customFilter.startDate}T${customFilter.startTime}:00`).toISOString();
-        const end = new Date(`${customFilter.endDate}T${customFilter.endTime}:59`).toISOString();
-        query = query.gte('created_at', start).lte('created_at', end);
-      } else if (timeRange === '24h') {
-        const yesterday = new Date();
-        yesterday.setHours(yesterday.getHours() - 24);
-        query = query.gte('created_at', yesterday.toISOString());
-      } else if (timeRange === '7d') {
-        const weekAgo = new Date();
-        weekAgo.setDate(weekAgo.getDate() - 7);
-        query = query.gte('created_at', weekAgo.toISOString());
-      } else if (timeRange === '30d') {
-        const monthAgo = new Date();
-        monthAgo.setDate(monthAgo.getDate() - 30);
-        query = query.gte('created_at', monthAgo.toISOString());
-      }
-
-      const { data: history, error: historyError } = await query
-        .order('created_at', { ascending: false })
-        .limit(1000); // เพิ่มเป็น 1000 รายการเสมอเพื่อให้ Alert Log มีข้อมูลย้อนหลังเพียงพอ
-
-      if (!historyError && history) {
-        const mappedHistory: SensorLog[] = [];
-        history.forEach((log: any) => {
-          // เพิ่มข้อมูลเซนเซอร์ 1
-          mappedHistory.push({
+      if (historyRes.data) {
+        const history = historyRes.data;
+        const mappedHistory: SensorLog[] = new Array(history.length * 2);
+        
+        const tempMax = Number(settings.temp_max);
+        const tempMin = Number(settings.temp_min);
+        const humidMax = Number(settings.humid_max);
+        const humidMin = Number(settings.humid_min);
+        
+        const alerts: AlertLogType[] = [];
+        
+        for (let i = 0; i < history.length; i++) {
+          const log = history[i];
+          const baseIdx = i * 2;
+          
+          const s1: SensorLog = {
             id: log.id * 2,
             sensor_id: 1,
             sensor_name: sensorNames[1] || 'เซนเซอร์ 1',
             temperature: Number(log.t1) || 0,
             humidity: Number(log.h1) || 0,
             recorded_at: log.created_at
-          });
-          // เพิ่มข้อมูลเซนเซอร์ 2
-          mappedHistory.push({
+          };
+          
+          const s2: SensorLog = {
             id: log.id * 2 + 1,
             sensor_id: 2,
             sensor_name: sensorNames[2] || 'เซนเซอร์ 2',
             temperature: Number(log.t2) || 0,
             humidity: Number(log.h2) || 0,
             recorded_at: log.created_at
+          };
+          
+          mappedHistory[baseIdx] = s1;
+          mappedHistory[baseIdx + 1] = s2;
+
+          // Check for alerts while mapping to avoid extra loops
+          [s1, s2].forEach(s => {
+            const isTempIssue = s.temperature > tempMax || s.temperature < tempMin;
+            const isHumidIssue = s.humidity > humidMax || s.humidity < humidMin;
+            
+            if (isTempIssue || isHumidIssue) {
+              alerts.push({
+                ...s,
+                status: isTempIssue && isHumidIssue ? 'both_high' : isTempIssue ? 'temperature_high' : 'humidity_high'
+              });
+            }
           });
-        });
+        }
         
-        // กรองข้อมูลที่ผิดปกติมาแสดงใน Alert Log ก่อนจะ reverse สำหรับกราฟ
-        const alerts = mappedHistory
-          .filter(log => 
-            log.temperature > Number(settings.temp_max) || 
-            log.temperature < Number(settings.temp_min) || 
-            log.humidity > Number(settings.humid_max) || 
-            log.humidity < Number(settings.humid_min)
-          )
-          .map(log => ({
-            ...log,
-            status: (log.temperature > Number(settings.temp_max) || log.temperature < Number(settings.temp_min)) && 
-                    (log.humidity > Number(settings.humid_max) || log.humidity < Number(settings.humid_min))
-              ? 'both_high' 
-              : (log.temperature > Number(settings.temp_max) || log.temperature < Number(settings.temp_min))
-                ? 'temperature_high' 
-                : 'humidity_high'
-          } as AlertLogType))
-          .sort((a, b) => new Date(b.recorded_at).getTime() - new Date(a.recorded_at).getTime());
-        
-        setAlertLogs(alerts);
+        // mappedHistory is already descending by time, so alerts is also descending.
+        setAlertLogs(alerts.slice(0, 100));
         setChartData(mappedHistory.reverse());
       }
 
@@ -294,14 +314,13 @@ export default function App() {
     fetchSettings();
     fetchData();
 
-    // ตั้งค่า Polling เป็น fallback (ทุกๆ 15 วินาที)
+    // ตั้งค่า Polling เป็น fallback (ทุกๆ 30 วินาที - ลดความถี่ลงเพราะมี Realtime แล้ว)
     const pollInterval = setInterval(() => {
-      fetchData();
-      // ดึงค่าตั้งค่าเฉพาะเมื่อไม่ได้เปิดหน้าต่างตั้งค่าอยู่ เพื่อไม่ให้ทับค่าที่กำลังพิมพ์
       if (!showSettings) {
+        fetchData();
         fetchSettings();
       }
-    }, 15000);
+    }, 30000);
 
     // ตั้งค่า Supabase Realtime Subscription สำหรับข้อมูลเซนเซอร์
     const sensorSubscription = supabase
@@ -311,49 +330,43 @@ export default function App() {
         { event: 'INSERT', schema: 'public', table: 'Temp-sketch_mar24a' },
         (payload) => {
           const newLog = payload.new;
+          const currentSensorNames = sensorNamesRef.current;
+          const currentSettings = settingsRef.current;
+          const currentTimeRange = timeRangeRef.current;
           
-          // ข้อมูลเซนเซอร์ 1
           const log1: SensorLog = {
             id: newLog.id * 2,
             sensor_id: 1,
-            sensor_name: sensorNames[1] || 'เซนเซอร์ 1',
-            temperature: newLog.t1 || 0,
-            humidity: newLog.h1 || 0,
+            sensor_name: currentSensorNames[1] || 'เซนเซอร์ 1',
+            temperature: Number(newLog.t1) || 0,
+            humidity: Number(newLog.h1) || 0,
             recorded_at: newLog.created_at
           };
 
-          // ข้อมูลเซนเซอร์ 2
           const log2: SensorLog = {
             id: newLog.id * 2 + 1,
             sensor_id: 2,
-            sensor_name: sensorNames[2] || 'เซนเซอร์ 2',
-            temperature: newLog.t2 || 0,
-            humidity: newLog.h2 || 0,
+            sensor_name: currentSensorNames[2] || 'เซนเซอร์ 2',
+            temperature: Number(newLog.t2) || 0,
+            humidity: Number(newLog.h2) || 0,
             recorded_at: newLog.created_at
           };
           
-          // อัพเดทข้อมูลล่าสุด
-          setLatestData({
-            1: log1,
-            2: log2
-          });
+          setLatestData({ 1: log1, 2: log2 });
           setLastUpdated(new Date());
 
-          // อัพเดทข้อมูลกราฟ (เฉพาะเมื่อเป็น Real-time)
-          if (timeRange === 'realtime') {
+          if (currentTimeRange === 'realtime') {
             setChartData(prev => {
               const newData = [...prev, log1, log2];
-              // เก็บข้อมูลไว้แค่ 200 รายการล่าสุด (100 จุดเวลา x 2 เซนเซอร์)
               if (newData.length > 200) return newData.slice(newData.length - 200);
               return newData;
             });
 
-            // ตรวจสอบและเพิ่ม Alert ถ้าค่าผิดปกติ
             [log1, log2].forEach(async (log) => {
-              const tempMax = Number(settings.temp_max);
-              const tempMin = Number(settings.temp_min);
-              const humidMax = Number(settings.humid_max);
-              const humidMin = Number(settings.humid_min);
+              const tempMax = Number(currentSettings.temp_max);
+              const tempMin = Number(currentSettings.temp_min);
+              const humidMax = Number(currentSettings.humid_max);
+              const humidMin = Number(currentSettings.humid_min);
 
               const isTempIssue = log.temperature > tempMax || log.temperature < tempMin;
               const isHumidIssue = log.humidity > humidMax || log.humidity < humidMin;
@@ -361,46 +374,34 @@ export default function App() {
               if (isTempIssue || isHumidIssue) {
                 const newAlert: AlertLogType = {
                   ...log,
-                  status: isTempIssue && isHumidIssue
-                    ? 'both_high' 
-                    : isTempIssue
-                      ? 'temperature_high' 
-                      : 'humidity_high'
+                  status: isTempIssue && isHumidIssue ? 'both_high' : isTempIssue ? 'temperature_high' : 'humidity_high'
                 };
                 setAlertLogs(prev => [newAlert, ...prev].slice(0, 50));
 
-                // ส่ง LINE Notification ถ้าตั้งค่าไว้และถึงเวลาแจ้งเตือน
-                if (settings.line_access_token && settings.line_user_id) {
+                if (currentSettings.line_access_token && currentSettings.line_user_id) {
                   const now = Date.now();
                   const lastTime = lastNotifiedRef.current[log.sensor_id] || 0;
-                  const intervalMs = (Number(settings.notify_interval) || 10) * 60 * 1000;
+                  const intervalMs = (Number(currentSettings.notify_interval) || 10) * 60 * 1000;
 
                   if (now - lastTime > intervalMs) {
                     lastNotifiedRef.current = { ...lastNotifiedRef.current, [log.sensor_id]: now };
-                    
-                    const sensorName = sensorNames[log.sensor_id] || log.sensor_name;
+                    const sensorName = currentSensorNames[log.sensor_id] || log.sensor_name;
                     let message = `⚠️ แจ้งเตือน: ${sensorName}\n`;
                     if (isTempIssue) message += `🌡️ อุณหภูมิ: ${log.temperature.toFixed(1)}°C (ปกติ ${tempMin}-${tempMax})\n`;
                     if (isHumidIssue) message += `💧 ความชื้น: ${log.humidity.toFixed(0)}% (ปกติ ${humidMin}-${humidMax})\n`;
                     message += `⏰ เวลา: ${format(new Date(log.recorded_at), 'HH:mm:ss')}`;
 
                     try {
-                      const response = await fetch('/api/line/push', {
+                      await fetch('/api/line/push', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                          to: settings.line_user_id,
-                          accessToken: settings.line_access_token,
+                          to: currentSettings.line_user_id,
+                          accessToken: currentSettings.line_access_token,
                           messages: [{ type: 'text', text: message }]
                         })
                       });
-                      if (!response.ok) {
-                        const text = await response.text();
-                        console.error('Auto LINE notification failed:', response.status, text);
-                      }
-                    } catch (err) {
-                      console.error('Failed to send auto LINE notification:', err);
-                    }
+                    } catch (err) { console.error('LINE error:', err); }
                   }
                 }
               }
@@ -410,17 +411,13 @@ export default function App() {
       )
       .subscribe();
 
-    // ตั้งค่า Supabase Realtime Subscription สำหรับการตั้งค่า (รวมถึงชื่อเซนเซอร์)
     const settingsSubscription = supabase
       .channel('device_settings_changes')
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'device_settings', filter: 'id=eq.1' },
         (payload) => {
-          console.log('Settings updated from cloud:', payload.new);
           const newData = payload.new;
-          
-          // อัปเดตเกณฑ์การแจ้งเตือนเฉพาะเมื่อไม่ได้เปิดหน้าต่างตั้งค่าอยู่
           if (!showSettings) {
             setSettings({
               temp_min: newData.temp_min,
@@ -432,27 +429,21 @@ export default function App() {
               line_user_id: newData.line_user_id || 'Ua36e33071aed1a4de990b282dde7ad0d'
             });
           }
-          
-          // อัปเดตชื่อเซนเซอร์ (ซิงค์ข้ามเครื่อง)
           if (newData.sensor_names) {
-            const names = typeof newData.sensor_names === 'string' 
-              ? JSON.parse(newData.sensor_names) 
-              : newData.sensor_names;
+            const names = typeof newData.sensor_names === 'string' ? JSON.parse(newData.sensor_names) : newData.sensor_names;
             setSensorNames(names);
             localStorage.setItem('sensorNames', JSON.stringify(names));
           }
         }
       )
-      .subscribe((status) => {
-        console.log('Settings subscription status:', status);
-      });
+      .subscribe();
 
     return () => {
       clearInterval(pollInterval);
       sensorSubscription.unsubscribe();
       settingsSubscription.unsubscribe();
     };
-  }, [fetchData, fetchSettings, sensorNames, settings.temp_max, settings.temp_min, settings.humid_max, settings.humid_min, settings.line_access_token, settings.line_user_id, settings.notify_interval, timeRange]);
+  }, [fetchData, fetchSettings, showSettings]);
 
   // คำนวณสถานะรวมของระบบ
   const systemStatus = useMemo(() => {
