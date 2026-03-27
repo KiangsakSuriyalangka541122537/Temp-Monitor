@@ -96,7 +96,32 @@ export default function App() {
     line_access_token: '',
     line_user_id: ''
   });
+  const [localSettings, setLocalSettings] = useState<any>(null);
+
+  useEffect(() => {
+    if (showSettings) {
+      setLocalSettings({
+        temp_min: settings.temp_min.toString(),
+        temp_max: settings.temp_max.toString(),
+        humid_min: settings.humid_min.toString(),
+        humid_max: settings.humid_max.toString(),
+        notify_interval: settings.notify_interval.toString(),
+        line_access_token: settings.line_access_token,
+        line_user_id: settings.line_user_id
+      });
+    }
+  }, [showSettings, settings]);
+
   const [isSavingSettings, setIsSavingSettings] = useState(false);
+
+  useEffect(() => {
+    if (!isLoggedIn) {
+      const timer = setTimeout(() => {
+        loginInputRef.current?.focus();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [isLoggedIn]);
 
   // ดึงค่าตั้งค่าจาก Supabase
   const fetchSettings = useCallback(async () => {
@@ -138,22 +163,28 @@ export default function App() {
 
   const saveSettings = async () => {
     setIsSavingSettings(true);
+    
+    const finalSettings = {
+      temp_min: parseFloat(localSettings.temp_min) || 0,
+      temp_max: parseFloat(localSettings.temp_max) || 0,
+      humid_min: parseFloat(localSettings.humid_min) || 0,
+      humid_max: parseFloat(localSettings.humid_max) || 0,
+      notify_interval: parseInt(localSettings.notify_interval) || 1,
+      line_access_token: localSettings.line_access_token,
+      line_user_id: localSettings.line_user_id
+    };
+
     const { error } = await supabase
       .from('device_settings')
       .update({
-        temp_min: settings.temp_min,
-        temp_max: settings.temp_max,
-        humid_min: settings.humid_min,
-        humid_max: settings.humid_max,
-        notify_interval: settings.notify_interval,
-        line_access_token: settings.line_access_token,
-        line_user_id: settings.line_user_id,
+        ...finalSettings,
         sensor_names: sensorNames,
         updated_at: new Date().toISOString()
       })
       .eq('id', 1);
     
     if (!error) {
+      setSettings(finalSettings);
       setShowSettings(false);
       toast.success('บันทึกการตั้งค่าเรียบร้อยแล้ว', {
         description: 'เกณฑ์การแจ้งเตือนและชื่อเซนเซอร์ถูกอัปเดตแล้ว',
@@ -605,6 +636,7 @@ export default function App() {
                 <input 
                   ref={loginInputRef}
                   type="password"
+                  autoFocus
                   value={loginPassword}
                   onChange={(e) => setLoginPassword(e.target.value)}
                   onKeyDown={(e) => {
@@ -876,17 +908,15 @@ export default function App() {
                   </button>
                 </div>
                 
-                <div className="p-6 space-y-6">
+                <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-zinc-500 uppercase tracking-wider">อุณหภูมิต่ำสุด (°C)</label>
                       <input 
                         type="number" 
-                        value={isNaN(settings.temp_min) ? '' : settings.temp_min} 
-                        onChange={(e) => {
-                          const val = e.target.value === '' ? NaN : parseFloat(e.target.value);
-                          setSettings(prev => ({...prev, temp_min: val}));
-                        }}
+                        step="0.1"
+                        value={localSettings?.temp_min || ''} 
+                        onChange={(e) => setLocalSettings({...localSettings, temp_min: e.target.value})}
                         className="w-full bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 rounded-xl p-3 outline-none focus:ring-2 focus:ring-blue-500/50"
                         autoFocus
                       />
@@ -895,11 +925,9 @@ export default function App() {
                       <label className="text-sm font-medium text-zinc-500 uppercase tracking-wider">อุณหภูมิสูงสุด (°C)</label>
                       <input 
                         type="number" 
-                        value={isNaN(settings.temp_max) ? '' : settings.temp_max} 
-                        onChange={(e) => {
-                          const val = e.target.value === '' ? NaN : parseFloat(e.target.value);
-                          setSettings(prev => ({...prev, temp_max: val}));
-                        }}
+                        step="0.1"
+                        value={localSettings?.temp_max || ''} 
+                        onChange={(e) => setLocalSettings({...localSettings, temp_max: e.target.value})}
                         className="w-full bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 rounded-xl p-3 outline-none focus:ring-2 focus:ring-red-500/50"
                       />
                     </div>
@@ -910,11 +938,9 @@ export default function App() {
                       <label className="text-sm font-medium text-zinc-500 uppercase tracking-wider">ความชื้นต่ำสุด (%)</label>
                       <input 
                         type="number" 
-                        value={isNaN(settings.humid_min) ? '' : settings.humid_min} 
-                        onChange={(e) => {
-                          const val = e.target.value === '' ? NaN : parseFloat(e.target.value);
-                          setSettings(prev => ({...prev, humid_min: val}));
-                        }}
+                        step="1"
+                        value={localSettings?.humid_min || ''} 
+                        onChange={(e) => setLocalSettings({...localSettings, humid_min: e.target.value})}
                         className="w-full bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 rounded-xl p-3 outline-none focus:ring-2 focus:ring-blue-500/50"
                       />
                     </div>
@@ -922,11 +948,9 @@ export default function App() {
                       <label className="text-sm font-medium text-zinc-500 uppercase tracking-wider">ความชื้นสูงสุด (%)</label>
                       <input 
                         type="number" 
-                        value={isNaN(settings.humid_max) ? '' : settings.humid_max} 
-                        onChange={(e) => {
-                          const val = e.target.value === '' ? NaN : parseFloat(e.target.value);
-                          setSettings(prev => ({...prev, humid_max: val}));
-                        }}
+                        step="1"
+                        value={localSettings?.humid_max || ''} 
+                        onChange={(e) => setLocalSettings({...localSettings, humid_max: e.target.value})}
                         className="w-full bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 rounded-xl p-3 outline-none focus:ring-2 focus:ring-red-500/50"
                       />
                     </div>
@@ -936,103 +960,70 @@ export default function App() {
                     <label className="text-sm font-medium text-zinc-500 uppercase tracking-wider">ระยะเวลาแจ้งเตือนซ้ำ (นาที)</label>
                     <input 
                       type="number" 
-                      value={isNaN(settings.notify_interval) ? '' : settings.notify_interval} 
-                      onChange={(e) => {
-                        const val = e.target.value === '' ? NaN : parseInt(e.target.value);
-                        setSettings(prev => ({...prev, notify_interval: val}));
-                      }}
+                      step="1"
+                      value={localSettings?.notify_interval || ''} 
+                      onChange={(e) => setLocalSettings({...localSettings, notify_interval: e.target.value})}
                       className="w-full bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 rounded-xl p-3 outline-none focus:ring-2 focus:ring-zinc-500/50"
                     />
                     <p className="text-xs text-zinc-400">ระยะเวลาขั้นต่ำก่อนจะส่ง LINE แจ้งเตือนซ้ำอีกครั้ง</p>
                   </div>
 
                   <div className="space-y-4 pt-2 border-t border-zinc-100 dark:border-zinc-800">
+                    <div className="flex justify-between items-center">
+                      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">LINE MESSAGING API (แทน NOTIFY)</label>
+                      <button 
+                        onClick={async () => {
+                          if (!localSettings?.line_access_token || !localSettings?.line_user_id) {
+                            toast.error('กรุณากรอก Token และ User ID');
+                            return;
+                          }
+                          
+                          try {
+                            const response = await fetch('/api/line/push', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                to: localSettings.line_user_id,
+                                accessToken: localSettings.line_access_token,
+                                messages: [{ type: 'text', text: '🔔 ทดสอบการแจ้งเตือนจากระบบ Server Monitor (Messaging API)' }]
+                              })
+                            });
+                            
+                            if (!response.ok) {
+                              const text = await response.text();
+                              toast.error(`ส่งไม่สำเร็จ: ${text}`);
+                              return;
+                            }
+                            toast.success('ส่งข้อความทดสอบเรียบร้อย');
+                          } catch (e) {
+                            toast.error('เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์');
+                          }
+                        }}
+                        className="text-[10px] bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-2 py-1 rounded-lg hover:bg-blue-200 transition-colors"
+                      >
+                        ทดสอบส่ง
+                      </button>
+                    </div>
                     <div className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">LINE Messaging API (แทน Notify)</label>
-                        {settings.line_access_token && settings.line_user_id && (
-                          <button 
-                            onClick={async () => {
-                              if (!settings.line_access_token || !settings.line_user_id) {
-                                toast.error('กรุณากรอก Token และ User ID');
-                                return;
-                              }
-                              
-                              try {
-                                const response = await fetch('/api/line/push', {
-                                  method: 'POST',
-                                  headers: {
-                                    'Content-Type': 'application/json',
-                                  },
-                                  body: JSON.stringify({
-                                    to: settings.line_user_id,
-                                    accessToken: settings.line_access_token,
-                                    messages: [{ type: 'text', text: '🔔 ทดสอบการแจ้งเตือนจากระบบ Server Monitor (Messaging API)' }]
-                                  })
-                                });
-                                
-                                if (!response.ok) {
-                                  const text = await response.text();
-                                  console.error('Server error response:', response.status, text);
-                                  let errorMsg = `Error ${response.status}`;
-                                  try {
-                                    const errData = JSON.parse(text);
-                                    if (errData.message) {
-                                      errorMsg = errData.message;
-                                    } else if (errData.error) {
-                                      errorMsg = errData.error;
-                                    } else if (errData.error_description) {
-                                      errorMsg = errData.error_description;
-                                    }
-                                    
-                                    if (errData.details && Array.isArray(errData.details)) {
-                                      const details = errData.details.map((d: any) => `${d.property ? d.property + ': ' : ''}${d.message}`).join(', ');
-                                      errorMsg += ` (${details})`;
-                                    }
-                                  } catch (e) {
-                                    errorMsg = text || `HTTP ${response.status}`;
-                                  }
-                                  toast.error(`ส่งไม่สำเร็จ: ${errorMsg}`);
-                                  return;
-                                }
-
-                                await response.json();
-                                toast.success('ส่งข้อความทดสอบเรียบร้อย');
-                              } catch (e) {
-                                console.error('LINE test error:', e);
-                                toast.error('เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์');
-                              }
-                            }}
-                            className="text-[10px] bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-2 py-1 rounded-lg hover:bg-blue-200 transition-colors"
-                          >
-                            ทดสอบส่ง
-                          </button>
-                        )}
-                      </div>
-                      
-                      <div className="space-y-3">
-                        <div>
-                          <label className="text-[10px] text-zinc-500 mb-1 block">Channel Access Token</label>
-                          <input 
-                            type="password" 
-                            placeholder="ใส่ Channel Access Token..."
-                            value={settings.line_access_token} 
-                            onChange={(e) => setSettings(prev => ({...prev, line_access_token: e.target.value}))}
-                            className="w-full bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 rounded-xl p-3 text-xs outline-none focus:ring-2 focus:ring-blue-500/50"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[10px] text-zinc-500 mb-1 block">Your User ID</label>
-                          <input 
-                            type="text" 
-                            placeholder="ใส่ User ID (U...)"
-                            value={settings.line_user_id} 
-                            onChange={(e) => setSettings(prev => ({...prev, line_user_id: e.target.value}))}
-                            className="w-full bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 rounded-xl p-3 text-xs outline-none focus:ring-2 focus:ring-blue-500/50"
-                          />
-                          <p className="text-[9px] text-zinc-400 mt-1 italic">* ต้องเพิ่ม Bot เป็นเพื่อนก่อนจึงจะรับข้อความได้ และต้องใช้ User ID จาก LINE Developers Console (ไม่ใช่ LINE ID)</p>
-                        </div>
-                      </div>
+                      <label className="text-sm font-medium text-zinc-500 uppercase tracking-wider">Channel Access Token</label>
+                      <input 
+                        type="password" 
+                        value={localSettings?.line_access_token || ''} 
+                        onChange={(e) => setLocalSettings({...localSettings, line_access_token: e.target.value})}
+                        className="w-full bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 rounded-xl p-3 outline-none focus:ring-2 focus:ring-green-500/50"
+                        placeholder="Channel Access Token"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-zinc-500 uppercase tracking-wider">Your User ID</label>
+                      <input 
+                        type="text" 
+                        value={localSettings?.line_user_id || ''} 
+                        onChange={(e) => setLocalSettings({...localSettings, line_user_id: e.target.value})}
+                        className="w-full bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 rounded-xl p-3 outline-none focus:ring-2 focus:ring-green-500/50"
+                        placeholder="User ID (U...)"
+                      />
+                      <p className="text-[10px] text-zinc-400 mt-1 italic">* ต้องเพิ่ม Bot เป็นเพื่อนก่อนจึงจะรับข้อความได้ และต้องใช้ User ID จาก LINE Developers Console (ไม่ใช่ LINE ID)</p>
                       <p className="text-[10px] text-zinc-400">ตั้งค่าได้ที่ LINE Developers Console</p>
                     </div>
                   </div>
@@ -1041,14 +1032,14 @@ export default function App() {
                 <div className="p-6 bg-zinc-50 dark:bg-zinc-800/50 flex gap-3">
                   <button 
                     onClick={() => setShowSettings(false)}
-                    className="flex-1 py-3 rounded-xl font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors"
+                    className="flex-1 px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 font-medium hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
                   >
                     ยกเลิก
                   </button>
                   <button 
                     onClick={saveSettings}
                     disabled={isSavingSettings}
-                    className="flex-1 py-3 rounded-xl font-medium bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 hover:opacity-90 transition-opacity disabled:opacity-50"
+                    className="flex-1 px-4 py-3 rounded-xl bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 font-bold hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
                   >
                     {isSavingSettings ? 'กำลังบันทึก...' : 'บันทึกการตั้งค่า'}
                   </button>
