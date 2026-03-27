@@ -509,9 +509,17 @@ export default function App() {
                       message += `📌 ปัญหา: เซนเซอร์ขัดข้อง (Sensor Error)\n`;
                       message += `🔍 สาเหตุ: ไม่สามารถอ่านค่าจากเซนเซอร์ได้ (ตรวจสอบสายสัญญาณ)\n`;
                     } else {
-                      message += `📌 ปัญหา: ค่าเกินเกณฑ์ที่กำหนด\n`;
-                      if (isTempIssue) message += `🌡️ อุณหภูมิ: ${log.temperature.toFixed(1)}°C (ปกติ ${tempMin}-${tempMax})\n`;
-                      if (isHumidIssue) message += `💧 ความชื้น: ${log.humidity.toFixed(0)}% (ปกติ ${humidMin}-${humidMax})\n`;
+                      message += `📌 ปัญหา: ค่าอยู่นอกเกณฑ์ที่กำหนด\n`;
+                      if (isTempIssue) {
+                        const status = log.temperature > tempMax ? 'สูงเกินเกณฑ์' : 'ต่ำกว่าเกณฑ์';
+                        message += `🌡️ อุณหภูมิ: ${log.temperature.toFixed(1)}°C (${status})\n`;
+                        message += `📊 เกณฑ์ที่ตั้งไว้: ${tempMin}-${tempMax}°C\n`;
+                      }
+                      if (isHumidIssue) {
+                        const status = log.humidity > humidMax ? 'สูงเกินเกณฑ์' : 'ต่ำกว่าเกณฑ์';
+                        message += `💧 ความชื้น: ${log.humidity.toFixed(0)}% (${status})\n`;
+                        message += `📊 เกณฑ์ที่ตั้งไว้: ${humidMin}-${humidMax}%\n`;
+                      }
                     }
                     message += `⏰ เวลา: ${format(new Date(log.recorded_at), 'HH:mm:ss')}`;
 
