@@ -452,15 +452,22 @@ export default function App() {
   // คำนวณสถานะรวมของระบบ
   const systemStatus = useMemo(() => {
     const sensors = Object.values(latestData) as SensorLog[];
-    if (sensors.length === 0) return 'loading';
+    if (sensors.length === 0) return { type: 'loading', sensors: [] };
     
     // ตรวจสอบว่าเซนเซอร์ออฟไลน์หรือไม่ (ไม่มีข้อมูลใหม่เกิน 5 นาที)
     const lastSeen = new Date(sensors[0].recorded_at).getTime();
     const diffMinutes = (currentTime.getTime() - lastSeen) / (1000 * 60);
     const isOffline = diffMinutes > 5;
 
-    if (isOffline) return 'offline';
+    if (isOffline) {
+      return { type: 'offline', sensors: sensors.map(s => sensorNames[s.sensor_id] || s.sensor_name) };
+    }
     
+    const errorSensors = sensors.filter(s => s.temperature === -999 || s.humidity === -999);
+    if (errorSensors.length > 0) {
+      return { type: 'error', sensors: errorSensors.map(s => sensorNames[s.sensor_id] || s.sensor_name) };
+    }
+
     const isCritical = (s: SensorLog) => 
       (s.temperature > settings.temp_max || s.temperature < settings.temp_min) && 
       (s.humidity > settings.humid_max || s.humidity < settings.humid_min);
@@ -469,13 +476,18 @@ export default function App() {
       s.temperature > settings.temp_max || s.temperature < settings.temp_min || 
       s.humidity > settings.humid_max || s.humidity < settings.humid_min;
 
-    const hasCritical = sensors.some(isCritical);
-    const hasWarning = sensors.some(isWarning);
+    const criticalSensors = sensors.filter(isCritical);
+    if (criticalSensors.length > 0) {
+      return { type: 'critical', sensors: criticalSensors.map(s => sensorNames[s.sensor_id] || s.sensor_name) };
+    }
+
+    const warningSensors = sensors.filter(isWarning);
+    if (warningSensors.length > 0) {
+      return { type: 'warning', sensors: warningSensors.map(s => sensorNames[s.sensor_id] || s.sensor_name) };
+    }
     
-    if (hasCritical) return 'critical';
-    if (hasWarning) return 'warning';
-    return 'normal';
-  }, [latestData, currentTime]);
+    return { type: 'normal', sensors: [] };
+  }, [latestData, currentTime, settings, sensorNames]);
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-[#09090b] text-zinc-900 dark:text-zinc-100 font-sans selection:bg-zinc-200 dark:selection:bg-zinc-800 transition-colors duration-300">
@@ -561,37 +573,39 @@ export default function App() {
               transition={{ duration: 0.2 }}
             >
               {/* SYSTEM STATUS BANNER */}
-              {systemStatus !== 'loading' && (
+              {systemStatus.type !== 'loading' && (
                 <div className={`mb-2 sm:mb-3 p-2 sm:p-3 rounded-2xl sm:rounded-3xl border flex items-center gap-3 sm:gap-4 transition-colors duration-300 shadow-sm ${
-                  systemStatus === 'normal' 
+                  systemStatus.type === 'normal' 
                     ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/50 text-emerald-800 dark:text-emerald-300'
-                    : systemStatus === 'warning'
+                    : systemStatus.type === 'warning'
                     ? 'bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-900/50 text-orange-800 dark:text-orange-300'
-                    : systemStatus === 'offline'
+                    : systemStatus.type === 'offline'
                     ? 'bg-zinc-100 dark:bg-zinc-900/40 border-zinc-300 dark:border-zinc-700 text-zinc-800 dark:text-zinc-300 animate-pulse'
                     : 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900/50 text-red-800 dark:text-red-300'
                 }`}>
                   <div className={`p-1.5 sm:p-2 rounded-full shrink-0 ${
-                    systemStatus === 'normal' ? 'bg-emerald-100 dark:bg-emerald-900/50' :
-                    systemStatus === 'warning' ? 'bg-orange-100 dark:bg-orange-900/50' :
-                    systemStatus === 'offline' ? 'bg-zinc-200 dark:bg-zinc-800' :
+                    systemStatus.type === 'normal' ? 'bg-emerald-100 dark:bg-emerald-900/50' :
+                    systemStatus.type === 'warning' ? 'bg-orange-100 dark:bg-orange-900/50' :
+                    systemStatus.type === 'offline' ? 'bg-zinc-200 dark:bg-zinc-800' :
                     'bg-red-100 dark:bg-red-900/50'
                   }`}>
-                    {systemStatus === 'normal' ? <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6" /> : 
-                     systemStatus === 'offline' ? <Activity className="w-5 h-5 sm:w-6 sm:h-6 animate-spin-slow" /> :
+                    {systemStatus.type === 'normal' ? <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6" /> : 
+                     systemStatus.type === 'offline' ? <Activity className="w-5 h-5 sm:w-6 sm:h-6 animate-spin-slow" /> :
                      <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6" />}
                   </div>
                   <div>
                     <h2 className="font-semibold text-sm sm:text-lg leading-tight">
-                      {systemStatus === 'normal' ? 'ระบบปกติ' :
-                       systemStatus === 'warning' ? 'พบความผิดปกติ' :
-                       systemStatus === 'offline' ? 'เซนเซอร์ขาดการเชื่อมต่อ (Offline)' :
-                       'วิกฤต: พบความผิดปกติรุนแรง'}
+                      {systemStatus.type === 'normal' ? 'ระบบปกติ' :
+                       systemStatus.type === 'offline' ? 'เซนเซอร์ขาดการเชื่อมต่อ (Offline)' :
+                       systemStatus.type === 'error' ? 'เซนเซอร์ขัดข้อง (Sensor Error)' :
+                       systemStatus.type === 'critical' ? 'วิกฤต: พบความผิดปกติรุนแรง' :
+                       'พบความผิดปกติ'}
                     </h2>
                     <p className="text-[10px] sm:text-sm opacity-80 mt-0.5">
-                      {systemStatus === 'normal' ? 'อุณหภูมิและความชื้นอยู่ในเกณฑ์มาตรฐาน' :
-                       systemStatus === 'offline' ? 'ไม่ได้รับข้อมูลใหม่เกิน 5 นาที กรุณาตรวจสอบอุปกรณ์' :
-                       'กรุณาตรวจสอบค่าเซ็นเซอร์ที่มีการแจ้งเตือน'}
+                      {systemStatus.type === 'normal' ? 'อุณหภูมิและความชื้นอยู่ในเกณฑ์มาตรฐาน' :
+                       systemStatus.type === 'offline' ? `ไม่ได้รับข้อมูลใหม่เกิน 5 นาที: ${systemStatus.sensors.join(', ')}` :
+                       systemStatus.type === 'error' ? `พบปัญหาที่: ${systemStatus.sensors.join(', ')}` :
+                       `กรุณาตรวจสอบ: ${systemStatus.sensors.join(', ')}`}
                     </p>
                   </div>
                 </div>
@@ -711,6 +725,7 @@ export default function App() {
                           setSettings(prev => ({...prev, temp_min: val}));
                         }}
                         className="w-full bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 rounded-xl p-3 outline-none focus:ring-2 focus:ring-blue-500/50"
+                        autoFocus
                       />
                     </div>
                     <div className="space-y-2">

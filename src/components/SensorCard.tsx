@@ -59,8 +59,10 @@ export function SensorCard({ data, sensorName, onNameChange, thresholds }: Senso
     <div
       className={cn(
         "relative flex flex-col p-1.5 sm:p-3 rounded-xl sm:rounded-3xl border transition-colors duration-300 shadow-sm",
-        isOffline || isSensorError
+        isOffline
           ? "bg-zinc-50 dark:bg-zinc-900/20 border-zinc-200 dark:border-zinc-800/50 grayscale"
+          : isSensorError
+          ? "bg-red-50/50 dark:bg-red-950/10 border-red-200 dark:border-red-900/30"
           : isTempIssue && isHumidIssue
           ? "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900/50"
           : isTempIssue
