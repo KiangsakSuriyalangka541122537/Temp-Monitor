@@ -20,9 +20,15 @@ const sensorErrorStartTimes: Record<number, number> = {};
 const lastNotifiedRef: Record<number, number> = {};
 const notificationCountsRef: Record<string, number> = {};
 
-// Helper to format time
+// Helper to format time in Thailand timezone
 const formatTime = (date: Date) => {
-  return date.toTimeString().split(' ')[0]; // HH:mm:ss
+  return new Intl.DateTimeFormat('th-TH', {
+    timeZone: 'Asia/Bangkok',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  }).format(date);
 };
 
 // Send LINE notification
@@ -88,23 +94,35 @@ export const startBackgroundWorker = () => {
         return;
       }
 
-      // Fetch latest logs for each sensor
+      // Fetch latest log from the correct table
       const { data: logsData, error: logsError } = await supabase
-        .from('sensor_logs')
-        .select('*')
-        .order('recorded_at', { ascending: false })
-        .limit(10); // Fetch a few to get latest for each sensor
+        .from('Temp-sketch_mar24a')
+        .select('id, created_at, t1, h1, t2, h2')
+        .order('created_at', { ascending: false })
+        .limit(1);
 
       if (logsError || !logsData || logsData.length === 0) {
         return;
       }
 
-      const latestLogsBySensor: Record<number, any> = {};
-      logsData.forEach(log => {
-        if (!latestLogsBySensor[log.sensor_id]) {
-          latestLogsBySensor[log.sensor_id] = log;
+      const latestLog = logsData[0];
+      
+      const latestLogsBySensor: Record<number, any> = {
+        1: {
+          sensor_id: 1,
+          sensor_name: settings.sensor_names[1] || 'เซนเซอร์ 1',
+          temperature: Number(latestLog.t1) || 0,
+          humidity: Number(latestLog.h1) || 0,
+          recorded_at: latestLog.created_at
+        },
+        2: {
+          sensor_id: 2,
+          sensor_name: settings.sensor_names[2] || 'เซนเซอร์ 2',
+          temperature: Number(latestLog.t2) || 0,
+          humidity: Number(latestLog.h2) || 0,
+          recorded_at: latestLog.created_at
         }
-      });
+      };
 
       const now = Date.now();
       let isSystemOffline = true;
