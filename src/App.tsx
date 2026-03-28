@@ -338,13 +338,14 @@ export default function App() {
 
           // Check for alerts while mapping to avoid extra loops
           [s1, s2].forEach(s => {
-            const isTempIssue = s.temperature > tempMax || s.temperature < tempMin;
-            const isHumidIssue = s.humidity > humidMax || s.humidity < humidMin;
+            const isError = s.temperature === -999 || s.humidity === -999;
+            const isTempIssue = !isError && (s.temperature > tempMax || s.temperature < tempMin);
+            const isHumidIssue = !isError && (s.humidity > humidMax || s.humidity < humidMin);
             
-            if (isTempIssue || isHumidIssue) {
+            if (isTempIssue || isHumidIssue || isError) {
               alerts.push({
                 ...s,
-                status: isTempIssue && isHumidIssue ? 'both_high' : isTempIssue ? 'temperature_high' : 'humidity_high'
+                status: isError ? 'error' : (isTempIssue && isHumidIssue ? 'both_high' : isTempIssue ? 'temperature_high' : 'humidity_high')
               });
             }
           });
@@ -473,9 +474,11 @@ export default function App() {
               const humidMax = Number(currentSettings.humid_max);
               const humidMin = Number(currentSettings.humid_min);
 
-              const isTempIssue = log.temperature > tempMax || log.temperature < tempMin;
-              const isHumidIssue = log.humidity > humidMax || log.humidity < humidMin;
+              // ตรวจสอบความผิดปกติ: ค่าเป็น -999 หมายถึงเซนเซอร์ชำรุดหรือสายหลุด
               const isError = log.temperature === -999 || log.humidity === -999;
+              const isTempIssue = !isError && (log.temperature > tempMax || log.temperature < tempMin);
+              const isHumidIssue = !isError && (log.humidity > humidMax || log.humidity < humidMin);
+              
               const problemKey = `sensor_${log.sensor_id}`;
 
               if (isTempIssue || isHumidIssue || isError) {
@@ -506,12 +509,12 @@ export default function App() {
                     notificationCountsRef.current[problemKey] = count + 1;
                     
                     const sensorName = currentSensorNames[log.sensor_id] || log.sensor_name;
-                    let message = `⚠️ แจ้งเตือน: ${sensorName}\n`;
+                    let message = '';
+                    
                     if (isError) {
-                      message += `📌 ปัญหา: เซนเซอร์ขัดข้อง (Sensor Error)\n`;
-                      message += `🔍 สาเหตุ: ไม่สามารถอ่านค่าจากเซนเซอร์ได้ (ตรวจสอบสายสัญญาณ)\n`;
+                      message = `❌ แจ้งเตือน: เซนเซอร์ขัดข้อง (Sensor Error)\n📍 จุดที่วัด: ${sensorName}\n📌 ปัญหา: ไม่สามารถอ่านค่าจากเซนเซอร์ได้\n🔍 สาเหตุ: เซนเซอร์อาจชำรุด, สายสัญญาณหลุด หรือไฟเลี้ยงไม่พอ\n🛠️ คำแนะนำ: กรุณาตรวจสอบการเชื่อมต่อของเซนเซอร์ทันที`;
                     } else {
-                      message += `📌 ปัญหา: ค่าอยู่นอกเกณฑ์ที่กำหนด\n`;
+                      message = `⚠️ แจ้งเตือน: ค่าผิดปกติ\n📍 จุดที่วัด: ${sensorName}\n`;
                       if (isTempIssue) {
                         const status = log.temperature > tempMax ? 'สูงเกินเกณฑ์' : 'ต่ำกว่าเกณฑ์';
                         message += `🌡️ อุณหภูมิ: ${log.temperature.toFixed(1)}°C (${status})\n`;
@@ -523,7 +526,7 @@ export default function App() {
                         message += `📊 เกณฑ์ที่ตั้งไว้: ${humidMin}-${humidMax}%\n`;
                       }
                     }
-                    message += `⏰ เวลา: ${format(new Date(log.recorded_at), 'HH:mm:ss')}`;
+                    message += `\n⏰ เวลา: ${format(new Date(log.recorded_at), 'HH:mm:ss')}`;
 
                     try {
                       await fetch('/api/line/push', {
