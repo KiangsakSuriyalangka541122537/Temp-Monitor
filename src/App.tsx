@@ -650,7 +650,7 @@ export default function App() {
     const lastSeen = new Date(sensors[0].recorded_at).getTime();
     const diffMinutes = (currentTime.getTime() - lastSeen) / (1000 * 60);
     const isOffline = diffMinutes > 10;
-    const isLagging = diffMinutes > 5 && diffMinutes <= 10;
+    const isLagging = diffMinutes > 6 && diffMinutes <= 10;
 
     if (isOffline) {
       return { 
