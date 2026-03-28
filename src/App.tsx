@@ -5,7 +5,7 @@
 
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { format } from 'date-fns';
-import { Sun, Moon, CheckCircle2, AlertTriangle, Activity, Settings, X, Check, FileText } from 'lucide-react';
+import { Sun, Moon, CheckCircle2, AlertTriangle, Activity, Settings, X, Check, FileText, WifiOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Toaster, toast } from 'sonner';
 import { supabase } from './lib/supabase';
@@ -405,7 +405,9 @@ export default function App() {
         if (now - lastOfflineNotifiedRef.current > intervalMs) {
           lastOfflineNotifiedRef.current = now;
           offlineNotificationCountRef.current += 1;
-          const message = `🔴 แจ้งเตือน: ระบบขาดการเชื่อมต่อ (Offline)\n📌 ปัญหา: ขาดการส่งข้อมูลจากอุปกรณ์\n🔍 สาเหตุ: อาจเกิดจาก WiFi หลุด หรือไฟดับ (ไม่ได้รับข้อมูลเกิน 10 นาที)\n⏰ เวลา: ${format(new Date(), 'HH:mm:ss')}`;
+          const lastSeenTime = format(new Date(lastSeen), 'HH:mm:ss');
+          const currentTimeStr = format(new Date(), 'HH:mm:ss');
+          const message = `🔴 แจ้งเตือน: ระบบขาดการเชื่อมต่อ (Offline)\n📌 ปัญหา: ไม่ได้รับข้อมูลจากอุปกรณ์เกิน 10 นาที\n🕒 ข้อมูลล่าสุดเมื่อ: ${lastSeenTime}\n⏳ ขาดหายไปแล้ว: ${Math.floor(diffMinutes)} นาที\n🔍 สาเหตุ: อาจเกิดจาก WiFi หลุด, ไฟดับ หรือปัญหาการส่งข้อมูลไปยัง Server\n⏰ เวลาปัจจุบัน: ${currentTimeStr}`;
           
           try {
             await fetch('/api/line/push', {
@@ -586,13 +588,28 @@ export default function App() {
     const sensors = Object.values(latestData) as SensorLog[];
     if (sensors.length === 0) return { type: 'loading', sensors: [] };
     
-    // ตรวจสอบว่าเซนเซอร์ออฟไลน์หรือไม่ (ไม่มีข้อมูลใหม่เกิน 5 นาที)
+    // ตรวจสอบว่าเซนเซอร์ออฟไลน์หรือไม่ (ไม่มีข้อมูลใหม่เกิน 10 นาที)
     const lastSeen = new Date(sensors[0].recorded_at).getTime();
     const diffMinutes = (currentTime.getTime() - lastSeen) / (1000 * 60);
-    const isOffline = diffMinutes > 5;
+    const isOffline = diffMinutes > 10;
+    const isLagging = diffMinutes > 5 && diffMinutes <= 10;
 
     if (isOffline) {
-      return { type: 'offline', sensors: sensors.map(s => sensorNames[s.sensor_id] || s.sensor_name) };
+      return { 
+        type: 'offline', 
+        sensors: sensors.map(s => sensorNames[s.sensor_id] || s.sensor_name),
+        lag: Math.floor(diffMinutes),
+        lastSeen: format(new Date(lastSeen), 'HH:mm:ss')
+      };
+    }
+
+    if (isLagging) {
+      return { 
+        type: 'lagging', 
+        sensors: sensors.map(s => sensorNames[s.sensor_id] || s.sensor_name),
+        lag: Math.floor(diffMinutes),
+        lastSeen: format(new Date(lastSeen), 'HH:mm:ss')
+      };
     }
     
     const errorSensors = sensors.filter(s => s.temperature === -999 || s.humidity === -999);
@@ -801,6 +818,8 @@ export default function App() {
                     ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/50 text-emerald-800 dark:text-emerald-300'
                     : systemStatus.type === 'warning'
                     ? 'bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-900/50 text-orange-800 dark:text-orange-300'
+                    : systemStatus.type === 'lagging'
+                    ? 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/50 text-amber-800 dark:text-amber-300'
                     : systemStatus.type === 'offline'
                     ? 'bg-zinc-100 dark:bg-zinc-900/40 border-zinc-300 dark:border-zinc-700 text-zinc-800 dark:text-zinc-300 animate-pulse'
                     : 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900/50 text-red-800 dark:text-red-300'
@@ -808,16 +827,19 @@ export default function App() {
                   <div className={`p-1.5 sm:p-2 rounded-full shrink-0 ${
                     systemStatus.type === 'normal' ? 'bg-emerald-100 dark:bg-emerald-900/50' :
                     systemStatus.type === 'warning' ? 'bg-orange-100 dark:bg-orange-900/50' :
+                    systemStatus.type === 'lagging' ? 'bg-amber-100 dark:bg-amber-900/50' :
                     systemStatus.type === 'offline' ? 'bg-zinc-200 dark:bg-zinc-800' :
                     'bg-red-100 dark:bg-red-900/50'
                   }`}>
                     {systemStatus.type === 'normal' ? <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6" /> : 
-                     systemStatus.type === 'offline' ? <Activity className="w-5 h-5 sm:w-6 sm:h-6 animate-spin-slow" /> :
+                     systemStatus.type === 'offline' ? <WifiOff className="w-5 h-5 sm:w-6 sm:h-6" /> :
+                     systemStatus.type === 'lagging' ? <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6" /> :
                      <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6" />}
                   </div>
                   <div>
                     <h2 className="font-semibold text-sm sm:text-lg leading-tight">
                       {systemStatus.type === 'normal' ? 'ระบบปกติ' :
+                       systemStatus.type === 'lagging' ? 'การเชื่อมต่อล่าช้า (Lagging)' :
                        systemStatus.type === 'offline' ? 'เซนเซอร์ขาดการเชื่อมต่อ (Offline)' :
                        systemStatus.type === 'error' ? 'เซนเซอร์ขัดข้อง (Sensor Error)' :
                        systemStatus.type === 'critical' ? 'วิกฤต: พบความผิดปกติรุนแรง' :
@@ -825,7 +847,8 @@ export default function App() {
                     </h2>
                     <p className="text-[10px] sm:text-sm opacity-80 mt-0.5">
                       {systemStatus.type === 'normal' ? 'อุณหภูมิและความชื้นอยู่ในเกณฑ์มาตรฐาน' :
-                       systemStatus.type === 'offline' ? `ไม่ได้รับข้อมูลใหม่เกิน 5 นาที: ${systemStatus.sensors.join(', ')}` :
+                       systemStatus.type === 'lagging' ? `ข้อมูลล่าช้า ${systemStatus.lag} นาที (ล่าสุดเมื่อ ${systemStatus.lastSeen})` :
+                       systemStatus.type === 'offline' ? `ขาดการเชื่อมต่อ ${systemStatus.lag} นาที (ล่าสุดเมื่อ ${systemStatus.lastSeen})` :
                        systemStatus.type === 'error' ? `พบปัญหาที่: ${systemStatus.sensors.join(', ')}` :
                        `กรุณาตรวจสอบ: ${systemStatus.sensors.join(', ')}`}
                     </p>

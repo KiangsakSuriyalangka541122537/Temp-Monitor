@@ -43,7 +43,9 @@ export function SensorCard({ data, sensorName, onNameChange, thresholds }: Senso
   }
 
   const lastSeen = new Date(data.recorded_at).getTime();
-  const isOffline = (Date.now() - lastSeen) / (1000 * 60) > 6;
+  const diffMinutes = (Date.now() - lastSeen) / (1000 * 60);
+  const isOffline = diffMinutes > 10;
+  const isLagging = diffMinutes > 5 && diffMinutes <= 10;
   const isSensorError = data.temperature === -999 || data.humidity === -999;
 
   const isTempHigh = data.temperature > thresholds.tempMax;
@@ -53,7 +55,7 @@ export function SensorCard({ data, sensorName, onNameChange, thresholds }: Senso
   
   const isTempIssue = !isSensorError && (isTempHigh || isTempLow);
   const isHumidIssue = !isSensorError && (isHumidHigh || isHumidLow);
-  const isNormal = !isTempIssue && !isHumidIssue && !isOffline && !isSensorError;
+  const isNormal = !isTempIssue && !isHumidIssue && !isOffline && !isLagging && !isSensorError;
 
   return (
     <div
@@ -61,6 +63,8 @@ export function SensorCard({ data, sensorName, onNameChange, thresholds }: Senso
         "relative flex flex-col p-1.5 sm:p-3 rounded-xl sm:rounded-3xl border transition-colors duration-300 shadow-sm",
         isOffline
           ? "bg-zinc-50 dark:bg-zinc-900/20 border-zinc-200 dark:border-zinc-800/50 grayscale"
+          : isLagging
+          ? "bg-amber-50/50 dark:bg-amber-950/10 border-amber-200 dark:border-amber-900/30"
           : isSensorError
           ? "bg-red-50/50 dark:bg-red-950/10 border-red-200 dark:border-red-900/30"
           : isTempIssue && isHumidIssue
@@ -97,8 +101,9 @@ export function SensorCard({ data, sensorName, onNameChange, thresholds }: Senso
           <div className="flex items-center gap-1.5 overflow-hidden">
             <h3 className="text-zinc-500 dark:text-zinc-400 font-medium text-[9px] sm:text-[11px] truncate">
               {sensorName} 
-              {isOffline && <span className="text-zinc-400 ml-1">(ออฟไลน์)</span>}
-              {!isOffline && isSensorError && <span className="text-red-500 ml-1">(เซนเซอร์มีปัญหา)</span>}
+              {isOffline && <span className="text-zinc-400 ml-1">(ออฟไลน์ {Math.floor(diffMinutes)}น.)</span>}
+              {isLagging && <span className="text-amber-500 ml-1">(ล่าช้า {Math.floor(diffMinutes)}น.)</span>}
+              {!isOffline && !isLagging && isSensorError && <span className="text-red-500 ml-1">(เซนเซอร์มีปัญหา)</span>}
             </h3>
             <button 
               onClick={() => setIsEditing(true)}
@@ -112,10 +117,11 @@ export function SensorCard({ data, sensorName, onNameChange, thresholds }: Senso
         {!isEditing && (
           <div className="flex gap-1 shrink-0">
             {isOffline && <Activity className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-zinc-400 animate-pulse" />}
-            {isSensorError && !isOffline && <TriangleAlert className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-500 animate-pulse" />}
+            {isLagging && <TriangleAlert className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-500 animate-pulse" />}
+            {isSensorError && !isOffline && !isLagging && <TriangleAlert className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-500 animate-pulse" />}
             {isNormal && <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-500" />}
-            {!isOffline && !isSensorError && isTempIssue && <TriangleAlert className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-500" />}
-            {!isOffline && !isSensorError && isHumidIssue && <Droplets className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-orange-500" />}
+            {!isOffline && !isLagging && !isSensorError && isTempIssue && <TriangleAlert className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-500" />}
+            {!isOffline && !isLagging && !isSensorError && isHumidIssue && <Droplets className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-orange-500" />}
           </div>
         )}
       </div>
