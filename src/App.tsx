@@ -234,6 +234,114 @@ export default function App() {
   useEffect(() => { timeRangeRef.current = timeRange; }, [timeRange]);
   useEffect(() => { latestDataRef.current = latestData; }, [latestData]);
 
+  // ตรวจสอบและส่งการแจ้งเตือน
+  const checkAndNotify = async (log: SensorLog, currentSettings: any, currentSensorNames: Record<number, string>) => {
+    const tempMax = Number(currentSettings.temp_max);
+    const tempMin = Number(currentSettings.temp_min);
+    const humidMax = Number(currentSettings.humid_max);
+    const humidMin = Number(currentSettings.humid_min);
+
+    // ตรวจสอบความผิดปกติ: ค่าเป็น -999 หมายถึงเซนเซอร์ชำรุดหรือสายหลุด
+    const isError = log.temperature === -999 || log.humidity === -999;
+    const isTempIssue = !isError && (log.temperature > tempMax || log.temperature < tempMin);
+    const isHumidIssue = !isError && (log.humidity > humidMax || log.humidity < humidMin);
+    
+    const problemKey = `sensor_${log.sensor_id}`;
+
+    if (isTempIssue || isHumidIssue || isError) {
+      const newAlert: AlertLogType = {
+        ...log,
+        status: isError ? 'error' : (isTempIssue && isHumidIssue ? 'both_high' : isTempIssue ? 'temperature_high' : 'humidity_high')
+      };
+      
+      setAlertLogs(prev => {
+        // ป้องกันการเพิ่มซ้ำในวินาทีเดียวกัน
+        if (prev.length > 0 && prev[0].recorded_at === newAlert.recorded_at && prev[0].sensor_id === newAlert.sensor_id) {
+          return prev;
+        }
+        return [newAlert, ...prev].slice(0, 50);
+      });
+
+      if (currentSettings.line_access_token && currentSettings.line_user_id) {
+        const now = Date.now();
+        const lastTime = lastNotifiedRef.current[log.sensor_id] || 0;
+        const count = notificationCountsRef.current[problemKey] || 0;
+        
+        let intervalMinutes = 10;
+        if (count === 0) {
+          intervalMinutes = 0; // เตือนทันทีครั้งแรก
+        } else if (count === 1) {
+          intervalMinutes = 5; // ครั้งที่สองห่าง 5 นาที
+        } else {
+          intervalMinutes = Number(currentSettings.notify_interval) || 10;
+        }
+
+        const intervalMs = intervalMinutes * 60 * 1000;
+
+        if (now - lastTime > intervalMs) {
+          lastNotifiedRef.current = { ...lastNotifiedRef.current, [log.sensor_id]: now };
+          notificationCountsRef.current[problemKey] = count + 1;
+          
+          const sensorName = currentSensorNames[log.sensor_id] || log.sensor_name;
+          let message = '';
+          
+          if (isError) {
+            message = `❌ แจ้งเตือน: เซนเซอร์ขัดข้อง (Sensor Error)\n📍 จุดที่วัด: ${sensorName}\n📌 ปัญหา: ไม่สามารถอ่านค่าจากเซนเซอร์ได้\n🔍 สาเหตุ: เซนเซอร์อาจชำรุด, สายสัญญาณหลุด หรือไฟเลี้ยงไม่พอ\n🛠️ คำแนะนำ: กรุณาตรวจสอบการเชื่อมต่อของเซนเซอร์ทันที`;
+          } else {
+            message = `⚠️ แจ้งเตือน: ค่าผิดปกติ\n📍 จุดที่วัด: ${sensorName}\n`;
+            if (isTempIssue) {
+              const status = log.temperature > tempMax ? 'สูงเกินเกณฑ์' : 'ต่ำกว่าเกณฑ์';
+              message += `🌡️ อุณหภูมิ: ${log.temperature.toFixed(1)}°C (${status})\n`;
+              message += `📊 เกณฑ์ที่ตั้งไว้: ${tempMin}-${tempMax}°C\n`;
+            }
+            if (isHumidIssue) {
+              const status = log.humidity > humidMax ? 'สูงเกินเกณฑ์' : 'ต่ำกว่าเกณฑ์';
+              message += `💧 ความชื้น: ${log.humidity.toFixed(0)}% (${status})\n`;
+              message += `📊 เกณฑ์ที่ตั้งไว้: ${humidMin}-${humidMax}%\n`;
+            }
+          }
+          message += `\n⏰ เวลา: ${format(new Date(log.recorded_at), 'HH:mm:ss')}`;
+
+            try {
+              const response = await fetch('/api/line/push', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  to: currentSettings.line_user_id,
+                  accessToken: currentSettings.line_access_token,
+                  messages: [{ type: 'text', text: message }]
+                })
+              });
+              
+              if (!response.ok) {
+                let errorMsg = `Error ${response.status}`;
+                try {
+                  const errData = await response.json();
+                  errorMsg = errData.message || errData.error_description || errorMsg;
+                } catch (e) {
+                  // Fallback if not JSON
+                }
+                console.error('LINE API Error:', errorMsg);
+                toast.error(`LINE Notify Error: ${errorMsg}`, {
+                  description: 'กรุณาตรวจสอบ Channel Access Token และ User ID ในหน้าตั้งค่า'
+                });
+              } else {
+                console.log('LINE notification sent successfully');
+              }
+            } catch (err) { 
+              console.error('LINE network error:', err);
+              toast.error('ไม่สามารถเชื่อมต่อกับระบบแจ้งเตือน LINE ได้', {
+                description: 'กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต'
+              });
+            }
+        }
+      }
+    } else {
+      // ข้อมูลปกติ ให้รีเซ็ตตัวนับ
+      notificationCountsRef.current[problemKey] = 0;
+    }
+  };
+
   // ดึงข้อมูลและตั้งค่า Realtime Subscription
   const fetchData = useCallback(async () => {
     try {
@@ -298,6 +406,11 @@ export default function App() {
         };
         setLatestData(newLatestData);
         setLastUpdated(new Date());
+
+        // ตรวจสอบการแจ้งเตือนจากการ Polling
+        [newLatestData[1], newLatestData[2]].forEach(log => {
+          checkAndNotify(log, settingsRef.current, sensorNamesRef.current);
+        });
       }
 
       if (historyRes.data) {
@@ -461,90 +574,16 @@ export default function App() {
           setLatestData({ 1: log1, 2: log2 });
           setLastUpdated(new Date());
 
+          // ตรวจสอบการแจ้งเตือนจาก Realtime (ไม่สนว่าอยู่หน้าไหนหรือเลือกช่วงเวลาอะไร)
+          [log1, log2].forEach(log => {
+            checkAndNotify(log, currentSettings, currentSensorNames);
+          });
+
           if (currentTimeRange === 'realtime') {
             setChartData(prev => {
               const newData = [...prev, log1, log2];
               if (newData.length > 200) return newData.slice(newData.length - 200);
               return newData;
-            });
-
-            [log1, log2].forEach(async (log) => {
-              const tempMax = Number(currentSettings.temp_max);
-              const tempMin = Number(currentSettings.temp_min);
-              const humidMax = Number(currentSettings.humid_max);
-              const humidMin = Number(currentSettings.humid_min);
-
-              // ตรวจสอบความผิดปกติ: ค่าเป็น -999 หมายถึงเซนเซอร์ชำรุดหรือสายหลุด
-              const isError = log.temperature === -999 || log.humidity === -999;
-              const isTempIssue = !isError && (log.temperature > tempMax || log.temperature < tempMin);
-              const isHumidIssue = !isError && (log.humidity > humidMax || log.humidity < humidMin);
-              
-              const problemKey = `sensor_${log.sensor_id}`;
-
-              if (isTempIssue || isHumidIssue || isError) {
-                const newAlert: AlertLogType = {
-                  ...log,
-                  status: isError ? 'error' : (isTempIssue && isHumidIssue ? 'both_high' : isTempIssue ? 'temperature_high' : 'humidity_high')
-                };
-                setAlertLogs(prev => [newAlert, ...prev].slice(0, 50));
-
-                if (currentSettings.line_access_token && currentSettings.line_user_id) {
-                  const now = Date.now();
-                  const lastTime = lastNotifiedRef.current[log.sensor_id] || 0;
-                  const count = notificationCountsRef.current[problemKey] || 0;
-                  
-                  let intervalMinutes = 10;
-                  if (count === 0) {
-                    intervalMinutes = 0; // เตือนทันทีครั้งแรก
-                  } else if (count === 1) {
-                    intervalMinutes = 5; // ครั้งที่สองห่าง 5 นาที
-                  } else {
-                    intervalMinutes = Number(currentSettings.notify_interval) || 10;
-                  }
-
-                  const intervalMs = intervalMinutes * 60 * 1000;
-
-                  if (now - lastTime > intervalMs) {
-                    lastNotifiedRef.current = { ...lastNotifiedRef.current, [log.sensor_id]: now };
-                    notificationCountsRef.current[problemKey] = count + 1;
-                    
-                    const sensorName = currentSensorNames[log.sensor_id] || log.sensor_name;
-                    let message = '';
-                    
-                    if (isError) {
-                      message = `❌ แจ้งเตือน: เซนเซอร์ขัดข้อง (Sensor Error)\n📍 จุดที่วัด: ${sensorName}\n📌 ปัญหา: ไม่สามารถอ่านค่าจากเซนเซอร์ได้\n🔍 สาเหตุ: เซนเซอร์อาจชำรุด, สายสัญญาณหลุด หรือไฟเลี้ยงไม่พอ\n🛠️ คำแนะนำ: กรุณาตรวจสอบการเชื่อมต่อของเซนเซอร์ทันที`;
-                    } else {
-                      message = `⚠️ แจ้งเตือน: ค่าผิดปกติ\n📍 จุดที่วัด: ${sensorName}\n`;
-                      if (isTempIssue) {
-                        const status = log.temperature > tempMax ? 'สูงเกินเกณฑ์' : 'ต่ำกว่าเกณฑ์';
-                        message += `🌡️ อุณหภูมิ: ${log.temperature.toFixed(1)}°C (${status})\n`;
-                        message += `📊 เกณฑ์ที่ตั้งไว้: ${tempMin}-${tempMax}°C\n`;
-                      }
-                      if (isHumidIssue) {
-                        const status = log.humidity > humidMax ? 'สูงเกินเกณฑ์' : 'ต่ำกว่าเกณฑ์';
-                        message += `💧 ความชื้น: ${log.humidity.toFixed(0)}% (${status})\n`;
-                        message += `📊 เกณฑ์ที่ตั้งไว้: ${humidMin}-${humidMax}%\n`;
-                      }
-                    }
-                    message += `\n⏰ เวลา: ${format(new Date(log.recorded_at), 'HH:mm:ss')}`;
-
-                    try {
-                      await fetch('/api/line/push', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          to: currentSettings.line_user_id,
-                          accessToken: currentSettings.line_access_token,
-                          messages: [{ type: 'text', text: message }]
-                        })
-                      });
-                    } catch (err) { console.error('LINE error:', err); }
-                  }
-                }
-              } else {
-                // ข้อมูลปกติ ให้รีเซ็ตตัวนับ
-                notificationCountsRef.current[problemKey] = 0;
-              }
             });
           }
         }
