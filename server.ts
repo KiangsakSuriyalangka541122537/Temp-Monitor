@@ -3,6 +3,7 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
+import { startBackgroundWorker } from "./src/lib/backgroundWorker.js";
 
 dotenv.config();
 
@@ -14,6 +15,9 @@ async function startServer() {
   const PORT = 3000;
 
   app.use(express.json());
+
+  // Start the background worker for LINE notifications
+  startBackgroundWorker();
 
   // Health check route
   app.get("/api/health", (req, res) => {

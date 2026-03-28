@@ -264,17 +264,8 @@ export default function App() {
       lastOfflineNotifiedRef.current = 0;
 
       if (currentSettings.line_access_token && currentSettings.line_user_id) {
-        try {
-          await fetch('/api/line/push', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              to: currentSettings.line_user_id,
-              accessToken: currentSettings.line_access_token,
-              messages: [{ type: 'text', text: recoveryMessage }]
-            })
-          });
-        } catch (err) { console.error('Recovery notification error:', err); }
+        // LINE Notification is now handled by the backend worker
+        // to ensure it runs even when the website is closed.
       }
     }
 
@@ -348,38 +339,7 @@ export default function App() {
           }
           message += `\n⏰ เวลา: ${format(new Date(log.recorded_at), 'HH:mm:ss')}`;
 
-            try {
-              const response = await fetch('/api/line/push', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  to: currentSettings.line_user_id,
-                  accessToken: currentSettings.line_access_token,
-                  messages: [{ type: 'text', text: message }]
-                })
-              });
-              
-              if (!response.ok) {
-                let errorMsg = `Error ${response.status}`;
-                try {
-                  const errData = await response.json();
-                  errorMsg = errData.message || errData.error_description || errorMsg;
-                } catch (e) {
-                  // Fallback if not JSON
-                }
-                console.error('LINE API Error:', errorMsg);
-                toast.error(`LINE Notify Error: ${errorMsg}`, {
-                  description: 'กรุณาตรวจสอบ Channel Access Token และ User ID ในหน้าตั้งค่า'
-                });
-              } else {
-                console.log('LINE notification sent successfully');
-              }
-            } catch (err) { 
-              console.error('LINE network error:', err);
-              toast.error('ไม่สามารถเชื่อมต่อกับระบบแจ้งเตือน LINE ได้', {
-                description: 'กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต'
-              });
-            }
+          // LINE Notification is now handled by the backend worker
         }
       }
     } else {
@@ -397,17 +357,7 @@ export default function App() {
         delete sensorErrorStartTimeRef.current[log.sensor_id];
 
         if (currentSettings.line_access_token && currentSettings.line_user_id) {
-          try {
-            fetch('/api/line/push', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                to: currentSettings.line_user_id,
-                accessToken: currentSettings.line_access_token,
-                messages: [{ type: 'text', text: recoveryMessage }]
-              })
-            });
-          } catch (err) { console.error('Sensor recovery notification error:', err); }
+          // LINE Notification is now handled by the backend worker
         }
       }
       notificationCountsRef.current[problemKey] = 0;
@@ -599,17 +549,7 @@ export default function App() {
           const currentTimeStr = format(new Date(), 'HH:mm:ss');
           const message = `🔴 แจ้งเตือน: ระบบขาดการเชื่อมต่อ (Offline)\n📌 ปัญหา: ไม่ได้รับข้อมูลจากอุปกรณ์เกิน 10 นาที\n🕒 ข้อมูลล่าสุดเมื่อ: ${lastSeenTime}\n⏳ ขาดหายไปแล้ว: ${Math.floor(diffMinutes)} นาที\n🔍 สาเหตุ: อาจเกิดจาก WiFi หลุด, ไฟดับ หรือปัญหาการส่งข้อมูลไปยัง Server\n⏰ เวลาปัจจุบัน: ${currentTimeStr}`;
           
-          try {
-            await fetch('/api/line/push', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                to: currentSettings.line_user_id,
-                accessToken: currentSettings.line_access_token,
-                messages: [{ type: 'text', text: message }]
-              })
-            });
-          } catch (err) { console.error('Offline notification error:', err); }
+          // LINE Notification is now handled by the backend worker
         }
       } else {
         // ถ้าข้อมูลกลับมาปกติ ให้รีเซ็ตตัวนับ Offline
@@ -810,7 +750,7 @@ export default function App() {
                           } else {
                             toast.error('รหัสผ่านไม่ถูกต้อง');
                             setLoginPassword('');
-                            loginInputRef.current?.focus();
+                            setTimeout(() => loginInputRef.current?.focus(), 50);
                           }
                         }
                       }}
@@ -831,7 +771,7 @@ export default function App() {
                     } else {
                       toast.error('รหัสผ่านไม่ถูกต้อง');
                       setLoginPassword('');
-                      loginInputRef.current?.focus();
+                      setTimeout(() => loginInputRef.current?.focus(), 50);
                     }
                   }}
                   className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-2xl transition-all shadow-lg shadow-blue-900/20 active:scale-[0.98] flex items-center justify-center gap-2"
