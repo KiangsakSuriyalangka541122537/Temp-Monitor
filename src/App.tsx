@@ -244,12 +244,13 @@ export default function App() {
   // ตรวจสอบและส่งการแจ้งเตือน
   const checkAndNotify = async (log: SensorLog, currentSettings: any, currentSensorNames: Record<number, string>) => {
     // ตรวจสอบการกลับมาออนไลน์ (Recovery)
-    if (offlineStartTimeRef.current) {
+    const logTime = new Date(log.recorded_at).getTime();
+    if (offlineStartTimeRef.current && logTime > offlineStartTimeRef.current) {
       const startTime = offlineStartTimeRef.current;
       offlineStartTimeRef.current = null; // ป้องกันการส่งซ้ำจากเซนเซอร์ตัวอื่นในรอบเดียวกัน
       setOfflineStartTime(null);
       
-      const recoveryTime = Date.now();
+      const recoveryTime = logTime; // ใช้เวลาของข้อมูลใหม่เป็นเวลาที่กลับมาออนไลน์
       const downtimeMs = recoveryTime - startTime;
       const minutes = Math.floor(downtimeMs / 60000);
       const seconds = Math.floor((downtimeMs % 60000) / 1000);
