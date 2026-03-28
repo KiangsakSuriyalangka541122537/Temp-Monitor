@@ -203,10 +203,17 @@ export default function App() {
   };
 
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [offlineStartTime, setOfflineStartTime] = useState<number | null>(null);
   const lastNotifiedRef = useRef<Record<number, number>>({});
   const notificationCountsRef = useRef<Record<string, number>>({});
   const lastOfflineNotifiedRef = useRef<number>(0);
   const offlineNotificationCountRef = useRef<number>(0);
+  const offlineStartTimeRef = useRef<number | null>(null);
+  const sensorErrorStartTimeRef = useRef<Record<number, number>>({});
+
+  useEffect(() => {
+    offlineStartTimeRef.current = offlineStartTime;
+  }, [offlineStartTime]);
 
   // จัดการการเปลี่ยน Theme
   useEffect(() => {
@@ -236,6 +243,40 @@ export default function App() {
 
   // ตรวจสอบและส่งการแจ้งเตือน
   const checkAndNotify = async (log: SensorLog, currentSettings: any, currentSensorNames: Record<number, string>) => {
+    // ตรวจสอบการกลับมาออนไลน์ (Recovery)
+    if (offlineStartTimeRef.current) {
+      const startTime = offlineStartTimeRef.current;
+      offlineStartTimeRef.current = null; // ป้องกันการส่งซ้ำจากเซนเซอร์ตัวอื่นในรอบเดียวกัน
+      setOfflineStartTime(null);
+      
+      const recoveryTime = Date.now();
+      const downtimeMs = recoveryTime - startTime;
+      const minutes = Math.floor(downtimeMs / 60000);
+      const seconds = Math.floor((downtimeMs % 60000) / 1000);
+      
+      const startTimeStr = format(new Date(startTime), 'HH:mm:ss');
+      const recoveryTimeStr = format(new Date(recoveryTime), 'HH:mm:ss');
+      
+      const recoveryMessage = `🟢 แจ้งเตือน: ระบบกลับมาใช้งานปกติ (Online)\n📍 สถานะ: เชื่อมต่อสำเร็จ\n🕒 เริ่มหลุดเมื่อ: ${startTimeStr}\n🕒 กลับมาเมื่อ: ${recoveryTimeStr}\n⏱️ รวมเวลาที่ขาดหาย: ${minutes} นาที ${seconds} วินาที\n✅ ระบบกำลังเริ่มบันทึกข้อมูลตามปกติ`;
+      
+      offlineNotificationCountRef.current = 0;
+      lastOfflineNotifiedRef.current = 0;
+
+      if (currentSettings.line_access_token && currentSettings.line_user_id) {
+        try {
+          await fetch('/api/line/push', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to: currentSettings.line_user_id,
+              accessToken: currentSettings.line_access_token,
+              messages: [{ type: 'text', text: recoveryMessage }]
+            })
+          });
+        } catch (err) { console.error('Recovery notification error:', err); }
+      }
+    }
+
     const tempMax = Number(currentSettings.temp_max);
     const tempMin = Number(currentSettings.temp_min);
     const humidMax = Number(currentSettings.humid_max);
@@ -249,6 +290,10 @@ export default function App() {
     const problemKey = `sensor_${log.sensor_id}`;
 
     if (isTempIssue || isHumidIssue || isError) {
+      if (isError && !sensorErrorStartTimeRef.current[log.sensor_id]) {
+        sensorErrorStartTimeRef.current[log.sensor_id] = Date.now();
+      }
+
       const newAlert: AlertLogType = {
         ...log,
         status: isError ? 'error' : (isTempIssue && isHumidIssue ? 'both_high' : isTempIssue ? 'temperature_high' : 'humidity_high')
@@ -338,6 +383,32 @@ export default function App() {
       }
     } else {
       // ข้อมูลปกติ ให้รีเซ็ตตัวนับ
+      if (sensorErrorStartTimeRef.current[log.sensor_id]) {
+        const recoveryTime = Date.now();
+        const startTime = sensorErrorStartTimeRef.current[log.sensor_id];
+        const downtimeMs = recoveryTime - startTime;
+        const minutes = Math.floor(downtimeMs / 60000);
+        const seconds = Math.floor((downtimeMs % 60000) / 1000);
+        
+        const sensorName = currentSensorNames[log.sensor_id] || log.sensor_name;
+        const recoveryMessage = `✅ แจ้งเตือน: เซนเซอร์กลับมาใช้งานปกติ\n📍 จุดที่วัด: ${sensorName}\n🕒 เริ่มขัดข้องเมื่อ: ${format(new Date(startTime), 'HH:mm:ss')}\n🕒 กลับมาเมื่อ: ${format(new Date(recoveryTime), 'HH:mm:ss')}\n⏱️ รวมเวลาที่ขัดข้อง: ${minutes} นาที ${seconds} วินาที`;
+        
+        delete sensorErrorStartTimeRef.current[log.sensor_id];
+
+        if (currentSettings.line_access_token && currentSettings.line_user_id) {
+          try {
+            fetch('/api/line/push', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                to: currentSettings.line_user_id,
+                accessToken: currentSettings.line_access_token,
+                messages: [{ type: 'text', text: recoveryMessage }]
+              })
+            });
+          } catch (err) { console.error('Sensor recovery notification error:', err); }
+        }
+      }
       notificationCountsRef.current[problemKey] = 0;
     }
   };
@@ -502,6 +573,10 @@ export default function App() {
       
       // ถ้าไม่มีข้อมูลใหม่เกิน 10 นาที และยังไม่ได้แจ้งเตือนในช่วงเวลาที่กำหนด
       if (diffMinutes > 10) {
+        if (!offlineStartTimeRef.current) {
+          setOfflineStartTime(lastSeen);
+        }
+        
         const now = Date.now();
         const count = offlineNotificationCountRef.current;
         let intervalMinutes = 10;
@@ -641,7 +716,8 @@ export default function App() {
         type: 'offline', 
         sensors: sensors.map(s => sensorNames[s.sensor_id] || s.sensor_name),
         lag: Math.floor(diffMinutes),
-        lastSeen: format(new Date(lastSeen), 'HH:mm:ss')
+        lastSeen: format(new Date(lastSeen), 'HH:mm:ss'),
+        offlineStartTime: offlineStartTime
       };
     }
 
@@ -650,7 +726,8 @@ export default function App() {
         type: 'lagging', 
         sensors: sensors.map(s => sensorNames[s.sensor_id] || s.sensor_name),
         lag: Math.floor(diffMinutes),
-        lastSeen: format(new Date(lastSeen), 'HH:mm:ss')
+        lastSeen: format(new Date(lastSeen), 'HH:mm:ss'),
+        offlineStartTime: offlineStartTime
       };
     }
     
@@ -678,7 +755,7 @@ export default function App() {
     }
     
     return { type: 'normal', sensors: [] };
-  }, [latestData, currentTime, settings, sensorNames]);
+  }, [latestData, currentTime, settings, sensorNames, offlineStartTime]);
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-[#09090b] text-zinc-900 dark:text-zinc-100 font-sans selection:bg-zinc-200 dark:selection:bg-zinc-800 transition-colors duration-300">
@@ -889,8 +966,26 @@ export default function App() {
                     </h2>
                     <p className="text-[10px] sm:text-sm opacity-80 mt-0.5">
                       {systemStatus.type === 'normal' ? 'อุณหภูมิและความชื้นอยู่ในเกณฑ์มาตรฐาน' :
-                       systemStatus.type === 'lagging' ? `ข้อมูลล่าช้า ${systemStatus.lag} นาที (ล่าสุดเมื่อ ${systemStatus.lastSeen})` :
-                       systemStatus.type === 'offline' ? `ขาดการเชื่อมต่อ ${systemStatus.lag} นาที (ล่าสุดเมื่อ ${systemStatus.lastSeen})` :
+                       systemStatus.type === 'lagging' ? (
+                         <>
+                           ข้อมูลล่าช้า {systemStatus.lag} นาที (ล่าสุดเมื่อ {systemStatus.lastSeen})
+                           {systemStatus.offlineStartTime && (
+                             <span className="block text-[9px] mt-0.5 opacity-70">
+                               ช่วงเวลาที่ขาดหาย: {format(new Date(systemStatus.offlineStartTime), 'HH:mm:ss')} - ปัจจุบัน
+                             </span>
+                           )}
+                         </>
+                       ) :
+                       systemStatus.type === 'offline' ? (
+                         <>
+                           ขาดการเชื่อมต่อ {systemStatus.lag} นาที (ล่าสุดเมื่อ {systemStatus.lastSeen})
+                           {systemStatus.offlineStartTime && (
+                             <span className="block text-[9px] mt-0.5 opacity-70">
+                               ช่วงเวลาที่ขาดหาย: {format(new Date(systemStatus.offlineStartTime), 'HH:mm:ss')} - ปัจจุบัน
+                             </span>
+                           )}
+                         </>
+                       ) :
                        systemStatus.type === 'error' ? `พบปัญหาที่: ${systemStatus.sensors.join(', ')}` :
                        `กรุณาตรวจสอบ: ${systemStatus.sensors.join(', ')}`}
                     </p>
