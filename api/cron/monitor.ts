@@ -115,7 +115,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
 
     const diffMinutes = (now - mostRecentLogTime) / (1000 * 60);
-    const isOffline = diffMinutes > 10;
+    const isOffline = diffMinutes > 5;
 
     // 3. Fetch notification state
     // We will use a table called 'notification_state' to track when we last sent a message
@@ -158,7 +158,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Send notification if it's been longer than notify_interval since last notify
       // Or if we haven't notified yet
       if (!state.last_offline_notified || minsSinceLastNotify >= settings.notify_interval) {
-        const message = `🔴 แจ้งเตือน: ระบบขาดการเชื่อมต่อ (Offline)\n📌 ปัญหา: ไม่ได้รับข้อมูลจากอุปกรณ์เกิน 10 นาที\n🕒 ข้อมูลล่าสุดเมื่อ: ${formatTime(new Date(mostRecentLogTime))}\n⏳ ขาดหายไปแล้ว: ${offlineDurationMins} นาที\n🔍 สาเหตุ: อาจเกิดจาก WiFi หลุด, ไฟดับ หรือปัญหาการส่งข้อมูลไปยัง Server\n⏰ เวลาปัจจุบัน: ${formatTime(new Date(now))}`;
+        const message = `🔴 แจ้งเตือน: ระบบขาดการเชื่อมต่อ (Offline)\n📌 ปัญหา: ไม่ได้รับข้อมูลจากอุปกรณ์เกิน 5 นาที\n🕒 ข้อมูลล่าสุดเมื่อ: ${formatTime(new Date(mostRecentLogTime))}\n⏳ ขาดหายไปแล้ว: ${offlineDurationMins} นาที\n🔍 สาเหตุ: อาจเกิดจาก WiFi หลุด, ไฟดับ หรือปัญหาการส่งข้อมูลไปยัง Server\n⏰ เวลาปัจจุบัน: ${formatTime(new Date(now))}`;
         
         await sendLineNotification(settings.line_user_id, settings.line_access_token, message);
         

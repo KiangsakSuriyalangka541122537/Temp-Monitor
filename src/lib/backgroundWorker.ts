@@ -150,9 +150,9 @@ export const startBackgroundWorker = () => {
         const offlineDurationMs = now - offlineStartTime;
         const offlineMinutes = Math.floor(offlineDurationMs / 60000);
 
-        // Notify if offline for > 10 mins
-        if (offlineMinutes >= 10) {
-          let intervalMinutes = 10;
+        // Notify if offline for > 5 mins
+        if (offlineMinutes >= 5) {
+          let intervalMinutes = 5;
           if (offlineNotificationCount === 0) {
             intervalMinutes = 0;
           } else if (offlineNotificationCount === 1) {
@@ -167,7 +167,7 @@ export const startBackgroundWorker = () => {
             lastOfflineNotified = now;
             offlineNotificationCount++;
 
-            const message = `🔴 แจ้งเตือน: ระบบขาดการเชื่อมต่อ (Offline)\n📌 ปัญหา: ไม่ได้รับข้อมูลจากอุปกรณ์เกิน 10 นาที\n🕒 ข้อมูลล่าสุดเมื่อ: ${formatTime(new Date(mostRecentLogTime))}\n⏳ ขาดหายไปแล้ว: ${offlineMinutes} นาที\n🔍 สาเหตุ: อาจเกิดจาก WiFi หลุด, ไฟดับ หรือปัญหาการส่งข้อมูลไปยัง Server\n⏰ เวลาปัจจุบัน: ${formatTime(new Date(now))}`;
+            const message = `🔴 แจ้งเตือน: ระบบขาดการเชื่อมต่อ (Offline)\n📌 ปัญหา: ไม่ได้รับข้อมูลจากอุปกรณ์เกิน 5 นาที\n🕒 ข้อมูลล่าสุดเมื่อ: ${formatTime(new Date(mostRecentLogTime))}\n⏳ ขาดหายไปแล้ว: ${offlineMinutes} นาที\n🔍 สาเหตุ: อาจเกิดจาก WiFi หลุด, ไฟดับ หรือปัญหาการส่งข้อมูลไปยัง Server\n⏰ เวลาปัจจุบัน: ${formatTime(new Date(now))}`;
             
             await sendLineNotification(settings.line_user_id, settings.line_access_token, message);
           }
