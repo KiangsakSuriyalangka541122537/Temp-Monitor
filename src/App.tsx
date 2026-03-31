@@ -797,7 +797,7 @@ export default function App() {
             </div>
             <div className="flex-1">
               <h1 className="text-lg sm:text-2xl font-semibold tracking-tight text-zinc-900 dark:text-white flex items-center gap-2 flex-wrap">
-                Server Monitor
+                อุณภูมิตู้เก็บยา
                 {!isConnected && (
                 <span className="text-[9px] sm:text-[10px] font-medium px-1.5 py-0.5 bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 rounded-full uppercase tracking-wider flex items-center gap-1">
                   <span className="w-1 h-1 bg-zinc-400 rounded-full animate-pulse"></span>
@@ -1114,7 +1114,7 @@ export default function App() {
                               body: JSON.stringify({
                                 to: localSettings.line_user_id,
                                 accessToken: localSettings.line_access_token,
-                                messages: [{ type: 'text', text: `🔔 ทดสอบการแจ้งเตือนจากระบบ Server Monitor (${isMessagingApi ? 'Messaging API' : 'LINE Notify'})` }]
+                                messages: [{ type: 'text', text: `🔔 ทดสอบการแจ้งเตือนจากระบบ อุณภูมิตู้เก็บยา (${isMessagingApi ? 'Messaging API' : 'LINE Notify'})` }]
                                 // message: '...' will be handled by proxy if to is empty
                               })
                             });

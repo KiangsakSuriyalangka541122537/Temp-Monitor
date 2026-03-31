@@ -1,5 +1,5 @@
 {
-  "name": "Server Room Monitor",
-  "description": "React + TypeScript Web Dashboard for Server Room Monitor",
+  "name": "อุณภูมิตู้เก็บยา",
+  "description": "ระบบเฝ้าระวังอุณหภูมิและควาชื้นตู้เก็บยา",
   "requestFramePermissions": []
 }
