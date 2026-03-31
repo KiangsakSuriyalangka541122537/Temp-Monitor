@@ -1098,22 +1098,24 @@ export default function App() {
 
                   <div className="space-y-4 pt-2 border-t border-zinc-100 dark:border-zinc-800">
                     <div className="flex justify-between items-center">
-                      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">LINE MESSAGING API (แทน NOTIFY)</label>
+                      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">LINE NOTIFY / MESSAGING API</label>
                       <button 
                         onClick={async () => {
-                          if (!localSettings?.line_access_token || !localSettings?.line_user_id) {
-                            toast.error('กรุณากรอก Token และ User ID');
+                          if (!localSettings?.line_access_token) {
+                            toast.error('กรุณากรอก Token');
                             return;
                           }
                           
                           try {
+                            const isMessagingApi = localSettings.line_user_id && localSettings.line_user_id.trim() !== '';
                             const response = await fetch('/api/line/push', {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
                               body: JSON.stringify({
                                 to: localSettings.line_user_id,
                                 accessToken: localSettings.line_access_token,
-                                messages: [{ type: 'text', text: '🔔 ทดสอบการแจ้งเตือนจากระบบ Server Monitor (Messaging API)' }]
+                                messages: [{ type: 'text', text: `🔔 ทดสอบการแจ้งเตือนจากระบบ Server Monitor (${isMessagingApi ? 'Messaging API' : 'LINE Notify'})` }]
+                                // message: '...' will be handled by proxy if to is empty
                               })
                             });
                             
@@ -1133,26 +1135,26 @@ export default function App() {
                       </button>
                     </div>
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-zinc-500 uppercase tracking-wider">Channel Access Token</label>
+                      <label className="text-sm font-medium text-zinc-500 uppercase tracking-wider">Line Token</label>
                       <input 
                         type="password" 
                         value={localSettings?.line_access_token || ''} 
                         onChange={(e) => setLocalSettings({...localSettings, line_access_token: e.target.value})}
                         className="w-full bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 rounded-xl p-3 outline-none focus:ring-2 focus:ring-green-500/50"
-                        placeholder="Channel Access Token"
+                        placeholder="LINE Notify Token หรือ Channel Access Token"
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-zinc-500 uppercase tracking-wider">Your User ID</label>
+                      <label className="text-sm font-medium text-zinc-500 uppercase tracking-wider">User ID (สำหรับ Messaging API เท่านั้น)</label>
                       <input 
                         type="text" 
                         value={localSettings?.line_user_id || ''} 
                         onChange={(e) => setLocalSettings({...localSettings, line_user_id: e.target.value})}
                         className="w-full bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 rounded-xl p-3 outline-none focus:ring-2 focus:ring-green-500/50"
-                        placeholder="User ID (U...)"
+                        placeholder="เว้นว่างไว้หากใช้ LINE Notify"
                       />
-                      <p className="text-[10px] text-zinc-400 mt-1 italic">* ต้องเพิ่ม Bot เป็นเพื่อนก่อนจึงจะรับข้อความได้ และต้องใช้ User ID จาก LINE Developers Console (ไม่ใช่ LINE ID)</p>
-                      <p className="text-[10px] text-zinc-400">ตั้งค่าได้ที่ LINE Developers Console</p>
+                      <p className="text-[10px] text-zinc-400 mt-1 italic">* หากใช้ LINE Notify ให้เว้นว่างช่อง User ID ไว้</p>
+                      <p className="text-[10px] text-zinc-400 italic">* หากใช้ Messaging API ต้องเพิ่ม Bot เป็นเพื่อนก่อน และใช้ User ID (U...)</p>
                     </div>
                   </div>
                 </div>

@@ -31,24 +31,44 @@ const formatTime = (date: Date) => {
   }).format(date);
 };
 
-// Send LINE notification
+// Send LINE notification (Supports both Messaging API and LINE Notify)
 const sendLineNotification = async (to: string, accessToken: string, message: string) => {
   try {
-    const response = await fetch('https://api.line.me/v2/bot/message/push', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken.trim()}`,
-      },
-      body: JSON.stringify({
-        to: to.trim(),
-        messages: [{ type: 'text', text: message }],
-      }),
-    });
-    if (!response.ok) {
-      console.error('Background Worker: LINE API Error Status:', response.status);
+    if (to && to.trim()) {
+      // Use LINE Messaging API (Push Message)
+      const response = await fetch('https://api.line.me/v2/bot/message/push', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken.trim()}`,
+        },
+        body: JSON.stringify({
+          to: to.trim(),
+          messages: [{ type: 'text', text: message }],
+        }),
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        console.error('Background Worker: LINE Messaging API Error:', response.status, text);
+      } else {
+        console.log('Background Worker: LINE Messaging notification sent successfully');
+      }
     } else {
-      console.log('Background Worker: LINE notification sent successfully');
+      // Use LINE Notify
+      const response = await fetch('https://notify-api.line.me/api/notify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Authorization: `Bearer ${accessToken.trim()}`,
+        },
+        body: new URLSearchParams({ message }),
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        console.error('Background Worker: LINE Notify Error:', response.status, text);
+      } else {
+        console.log('Background Worker: LINE Notify sent successfully');
+      }
     }
   } catch (error) {
     console.error('Background Worker: Error sending LINE notification:', error);
@@ -89,7 +109,7 @@ export const startBackgroundWorker = () => {
         sensor_names: settingsData.sensor_names || { 1: 'เซนเซอร์ 1', 2: 'เซนเซอร์ 2' }
       };
 
-      if (!settings.line_access_token || !settings.line_user_id) {
+      if (!settings.line_access_token) {
         // No LINE credentials, skip monitoring
         return;
       }

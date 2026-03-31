@@ -24,49 +24,83 @@ async function startServer() {
     res.json({ status: "ok", environment: process.env.NODE_ENV || "development" });
   });
 
-  // Proxy route for LINE Messaging API to avoid CORS issues
+  // Cron-job endpoint to keep the server alive and trigger background monitoring
+  app.get("/api/cron/monitor", (req, res) => {
+    console.log("Cron job heartbeat received at:", new Date().toISOString());
+    res.json({ 
+      status: "ok", 
+      message: "Server is awake and background worker is monitoring sensors.",
+      timestamp: new Date().toISOString()
+    });
+  });
+
+  // Proxy route for LINE Messaging API / LINE Notify to avoid CORS issues
   app.post("/api/line/push", async (req, res) => {
     console.log("Received POST request to /api/line/push");
-    const { to, messages, accessToken } = req.body;
+    const { to, messages, accessToken, message } = req.body;
 
-    if (!to || !messages || !accessToken) {
-      return res.status(400).json({ error: "Missing required fields" });
+    if (!accessToken) {
+      return res.status(400).json({ error: "Missing Access Token" });
     }
 
     try {
-      console.log(`Attempting to send LINE push message to: ${to.substring(0, 10)}...`);
-      const response = await fetch("https://api.line.me/v2/bot/message/push", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken.trim()}`,
-        },
-        body: JSON.stringify({ to: to.trim(), messages }),
-      });
+      if (to && to.trim()) {
+        // Use LINE Messaging API (Push Message)
+        console.log(`Attempting to send LINE push message to: ${to.substring(0, 10)}...`);
+        const response = await fetch("https://api.line.me/v2/bot/message/push", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken.trim()}`,
+          },
+          body: JSON.stringify({ to: to.trim(), messages }),
+        });
 
-      const text = await response.text();
-      let data;
-      try {
-        data = JSON.parse(text);
-      } catch (e) {
-        data = { message: text || `HTTP Error ${response.status}` };
-      }
-
-      if (response.ok) {
-        console.log("LINE message sent successfully");
-        res.json(data);
-      } else {
-        console.error("LINE API Error Status:", response.status);
-        console.error("LINE API Error Body:", text);
-        
-        // Ensure we always have a message to return
-        if (!data.message && data.error_description) {
-          data.message = data.error_description;
-        } else if (!data.message) {
-          data.message = `LINE API Error ${response.status}: ${text.substring(0, 100)}`;
+        const text = await response.text();
+        let data;
+        try {
+          data = JSON.parse(text);
+        } catch (e) {
+          data = { message: text || `HTTP Error ${response.status}` };
         }
-        
-        res.status(response.status).json(data);
+
+        if (response.ok) {
+          console.log("LINE Messaging message sent successfully");
+          res.json(data);
+        } else {
+          console.error("LINE Messaging API Error Status:", response.status);
+          console.error("LINE Messaging API Error Body:", text);
+          res.status(response.status).json(data);
+        }
+      } else {
+        // Use LINE Notify
+        console.log("Attempting to send LINE Notify message...");
+        const notifyMessage = message || (messages && messages[0]?.text) || "Test Message";
+        const response = await fetch("https://notify-api.line.me/api/notify", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+            Authorization: `Bearer ${accessToken.trim()}`,
+          },
+          body: new URLSearchParams({ message: notifyMessage }),
+        });
+
+        const text = await response.text();
+        let data;
+        try {
+          data = JSON.parse(text);
+        } catch (e) {
+          data = { message: text || `HTTP Error ${response.status}` };
+        }
+
+        if (response.ok) {
+          console.log("LINE Notify message sent successfully");
+          res.json(data);
+        } else {
+          console.error("LINE Notify API Error Status:", response.status);
+          console.error("LINE Notify API Error Body:", text);
+          res.status(response.status).json(data);
+        }
       }
     } catch (error) {
       console.error("Error proxying to LINE API:", error);

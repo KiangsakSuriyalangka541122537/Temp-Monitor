@@ -17,21 +17,35 @@ const formatTime = (date: Date) => {
   }).format(date);
 };
 
-// Send LINE notification
+// Send LINE notification (Supports both Messaging API and LINE Notify)
 const sendLineNotification = async (to: string, accessToken: string, message: string) => {
   try {
-    const response = await fetch('https://api.line.me/v2/bot/message/push', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken.trim()}`,
-      },
-      body: JSON.stringify({
-        to: to.trim(),
-        messages: [{ type: 'text', text: message }],
-      }),
-    });
-    return response.ok;
+    if (to && to.trim()) {
+      // Use LINE Messaging API (Push Message)
+      const response = await fetch('https://api.line.me/v2/bot/message/push', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken.trim()}`,
+        },
+        body: JSON.stringify({
+          to: to.trim(),
+          messages: [{ type: 'text', text: message }],
+        }),
+      });
+      return response.ok;
+    } else {
+      // Use LINE Notify
+      const response = await fetch('https://notify-api.line.me/api/notify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Authorization: `Bearer ${accessToken.trim()}`,
+        },
+        body: new URLSearchParams({ message }),
+      });
+      return response.ok;
+    }
   } catch (error) {
     console.error('Error sending LINE notification:', error);
     return false;
@@ -71,7 +85,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       sensor_names: settingsData.sensor_names || { 1: 'เซนเซอร์ 1', 2: 'เซนเซอร์ 2' }
     };
 
-    if (!settings.line_access_token || !settings.line_user_id) {
+    if (!settings.line_access_token) {
       return res.status(400).json({ error: 'LINE credentials not configured' });
     }
 
