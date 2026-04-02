@@ -3,7 +3,6 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
-import { startBackgroundWorker } from "./src/lib/backgroundWorker.js";
 
 dotenv.config();
 
@@ -16,22 +15,9 @@ async function startServer() {
 
   app.use(express.json());
 
-  // Start the background worker for LINE notifications
-  startBackgroundWorker();
-
   // Health check route
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok", environment: process.env.NODE_ENV || "development" });
-  });
-
-  // Cron-job endpoint to keep the server alive and trigger background monitoring
-  app.get("/api/cron/monitor", (req, res) => {
-    console.log("Cron job heartbeat received at:", new Date().toISOString());
-    res.json({ 
-      status: "ok", 
-      message: "Server is awake and background worker is monitoring sensors.",
-      timestamp: new Date().toISOString()
-    });
   });
 
   // Proxy route for LINE Messaging API / LINE Notify to avoid CORS issues
