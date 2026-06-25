@@ -20,6 +20,16 @@ async function startServer() {
     res.json({ status: "ok", environment: process.env.NODE_ENV || "development" });
   });
 
+  // Cron-job endpoint to keep the server alive and trigger background monitoring
+  app.get("/api/cron/monitor", (req, res) => {
+    console.log("Cron job heartbeat received at:", new Date().toISOString());
+    res.json({ 
+      status: "ok", 
+      message: "Server is awake and background worker is monitoring sensors.",
+      timestamp: new Date().toISOString()
+    });
+  });
+
   // Proxy route for LINE Messaging API / LINE Notify to avoid CORS issues
   app.post("/api/line/push", async (req, res) => {
     console.log("Received POST request to /api/line/push");
