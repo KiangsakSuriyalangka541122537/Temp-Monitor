@@ -274,10 +274,11 @@ export default function App() {
     const humidMax = Number(currentSettings.humid_max);
     const humidMin = Number(currentSettings.humid_min);
 
-    // ตรวจสอบความผิดปกติ: ค่าเป็น -999 หมายถึงเซนเซอร์ชำรุดหรือสายหลุด
-    const isError = log.temperature === -999 || log.humidity === -999;
+    // ตรวจสอบความผิดปกติ: ค่าเป็น -999 หมายถึงเซนเซอร์ชำรุดหรือสายหลุด (เซนเซอร์ตัวที่ 2 ไม่ตรวจจับความชื้น)
+    const isS2 = log.sensor_id === 2;
+    const isError = log.temperature === -999 || (!isS2 && log.humidity === -999);
     const isTempIssue = !isError && (log.temperature > tempMax || log.temperature < tempMin);
-    const isHumidIssue = !isError && (log.humidity > humidMax || log.humidity < humidMin);
+    const isHumidIssue = !isS2 && !isError && (log.humidity > humidMax || log.humidity < humidMin);
     
     const problemKey = `sensor_${log.sensor_id}`;
 
@@ -473,9 +474,10 @@ export default function App() {
 
           // Check for alerts while mapping to avoid extra loops
           [s1, s2].forEach(s => {
-            const isError = s.temperature === -999 || s.humidity === -999;
+            const isS2 = s.sensor_id === 2;
+            const isError = s.temperature === -999 || (!isS2 && s.humidity === -999);
             const isTempIssue = !isError && (s.temperature > tempMax || s.temperature < tempMin);
-            const isHumidIssue = !isError && (s.humidity > humidMax || s.humidity < humidMin);
+            const isHumidIssue = !isS2 && !isError && (s.humidity > humidMax || s.humidity < humidMin);
             
             if (isTempIssue || isHumidIssue || isError) {
               alerts.push({

@@ -3,6 +3,7 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
+import { startBackgroundWorker } from "./src/lib/backgroundWorker";
 
 dotenv.config();
 
@@ -121,6 +122,14 @@ async function startServer() {
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
+    
+    // Start the background monitoring worker
+    try {
+      startBackgroundWorker();
+      console.log("Background worker initialized successfully in server.ts");
+    } catch (e) {
+      console.error("Failed to start background worker:", e);
+    }
   });
 }
 

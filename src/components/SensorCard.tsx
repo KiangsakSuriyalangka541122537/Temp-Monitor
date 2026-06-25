@@ -46,7 +46,9 @@ export function SensorCard({ data, sensorName, onNameChange, thresholds }: Senso
   const diffMinutes = (Date.now() - lastSeen) / (1000 * 60);
   const isOffline = diffMinutes > 10;
   const isLagging = diffMinutes > 5 && diffMinutes <= 10;
-  const isSensorError = data.temperature === -999 || data.humidity === -999;
+  
+  const isSensor2 = data.sensor_id === 2;
+  const isSensorError = data.temperature === -999 || (!isSensor2 && data.humidity === -999);
 
   const isTempHigh = data.temperature > thresholds.tempMax;
   const isTempLow = data.temperature < thresholds.tempMin;
@@ -54,7 +56,7 @@ export function SensorCard({ data, sensorName, onNameChange, thresholds }: Senso
   const isHumidLow = data.humidity < thresholds.humidMin;
   
   const isTempIssue = !isSensorError && (isTempHigh || isTempLow);
-  const isHumidIssue = !isSensorError && (isHumidHigh || isHumidLow);
+  const isHumidIssue = !isSensor2 && !isSensorError && (isHumidHigh || isHumidLow);
   const isNormal = !isTempIssue && !isHumidIssue && !isOffline && !isLagging && !isSensorError;
 
   return (
@@ -138,13 +140,21 @@ export function SensorCard({ data, sensorName, onNameChange, thresholds }: Senso
 
       <div className="flex items-center gap-1 text-[8px] sm:text-[11px] pt-1.5 sm:pt-3 border-t border-zinc-100 dark:border-zinc-800/50 justify-between">
         <div className="flex items-center gap-0.5 sm:gap-1">
-          <Droplets className={cn("w-2.5 h-2.5 sm:w-3.5 sm:h-3.5", isHumidIssue && !isSensorError ? "text-orange-500" : "text-zinc-400 dark:text-zinc-500")} />
-          <span className={cn(
-            "font-medium",
-            isHumidIssue && !isSensorError ? "text-orange-600 dark:text-orange-400" : "text-zinc-600 dark:text-zinc-400"
-          )}>
-            {isSensorError ? "--" : data.humidity.toFixed(0)}%
-          </span>
+          {!isSensor2 ? (
+            <>
+              <Droplets className={cn("w-2.5 h-2.5 sm:w-3.5 sm:h-3.5", isHumidIssue && !isSensorError ? "text-orange-500" : "text-zinc-400 dark:text-zinc-500")} />
+              <span className={cn(
+                "font-medium",
+                isHumidIssue && !isSensorError ? "text-orange-600 dark:text-orange-400" : "text-zinc-600 dark:text-zinc-400"
+              )}>
+                {isSensorError ? "--" : data.humidity.toFixed(0)}%
+              </span>
+            </>
+          ) : (
+            <span className="text-zinc-400 dark:text-zinc-500 text-[8px] sm:text-[10px] font-medium">
+              วัดอุณหภูมิเท่านั้น
+            </span>
+          )}
         </div>
         <span className="text-[8px] sm:text-[10px] text-zinc-400 dark:text-zinc-500 font-mono">
           {new Date(data.recorded_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

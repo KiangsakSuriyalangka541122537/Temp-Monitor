@@ -3,14 +3,14 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL;
-const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
+const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://tzjmorrkocoxihtsyrfy.supabase.co';
+const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR6am1vcnJrb2NveGlodHN5cmZ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIxNDk3MDUsImV4cCI6MjA4NzcyNTcwNX0.SirelOHD7cp51HyM7I5eKTchUfMrDss0asZfAJVo5k8';
 
-if (!supabaseUrl || !supabaseKey) {
-  console.error('Missing Supabase credentials in environment variables.');
+if (!process.env.VITE_SUPABASE_URL || !process.env.VITE_SUPABASE_ANON_KEY) {
+  console.log('Using fallback Supabase credentials for background worker.');
 }
 
-const supabase = createClient(supabaseUrl || '', supabaseKey || '');
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 // State variables for tracking
 let offlineStartTime: number | null = null;
@@ -187,7 +187,20 @@ export const startBackgroundWorker = () => {
             lastOfflineNotified = now;
             offlineNotificationCount++;
 
-            const message = `🔴 แจ้งเตือน: ระบบขาดการเชื่อมต่อ (Offline)\n📌 ปัญหา: ไม่ได้รับข้อมูลจากอุปกรณ์เกิน 5 นาที\n🕒 ข้อมูลล่าสุดเมื่อ: ${formatTime(new Date(mostRecentLogTime))}\n⏳ ขาดหายไปแล้ว: ${offlineMinutes} นาที\n🔍 สาเหตุ: อาจเกิดจาก WiFi หลุด, ไฟดับ หรือปัญหาการส่งข้อมูลไปยัง Server\n⏰ เวลาปัจจุบัน: ${formatTime(new Date(now))}`;
+            const t1 = latestLogsBySensor[1]?.temperature !== -999 ? `${latestLogsBySensor[1]?.temperature.toFixed(1)}°C` : 'ขัดข้อง';
+            const h1 = latestLogsBySensor[1]?.humidity !== -999 ? `${latestLogsBySensor[1]?.humidity.toFixed(0)}%` : 'ขัดข้อง';
+            const t2 = latestLogsBySensor[2]?.temperature !== -999 ? `${latestLogsBySensor[2]?.temperature.toFixed(1)}°C` : 'ขัดข้อง';
+            const h2 = latestLogsBySensor[2]?.humidity !== -999 ? `${latestLogsBySensor[2]?.humidity.toFixed(0)}%` : 'ขัดข้อง';
+
+            const message = `🔴 แจ้งเตือน: พบปัญหาขาดการเชื่อมต่อ (Offline)\n` +
+              `📌 อุปกรณ์: เครื่องวัดอุณหภูมิตู้เก็บยา\n` +
+              `⚠️ สถานะ: ขาดการเชื่อมต่อเกิน 5 นาที (อาจเกิดจาก WiFi หลุด, ไฟดับ หรือบอร์ดไม่มีไฟเลี้ยง)\n` +
+              `🕒 ข้อมูลล่าสุดเมื่อ: ${formatTime(new Date(mostRecentLogTime))}\n` +
+              `⏳ ขาดหายไปแล้ว: ${offlineMinutes} นาที\n` +
+              `📊 อุณหภูมิ/ความชื้นล่าสุดก่อนหลุด:\n` +
+              `🔹 ${settings.sensor_names[1] || 'เซนเซอร์ 1'}: ${t1} | ${h1}\n` +
+              `🔹 ${settings.sensor_names[2] || 'เซนเซอร์ 2'}: ${t2} | ${h2}\n` +
+              `⏰ เวลาปัจจุบัน: ${formatTime(new Date(now))}`;
             
             await sendLineNotification(settings.line_user_id, settings.line_access_token, message);
           }
@@ -222,9 +235,10 @@ export const startBackgroundWorker = () => {
           return;
         }
 
-        const isError = log.temperature === -999 || log.humidity === -999;
+        const isS2 = log.sensor_id === 2;
+        const isError = log.temperature === -999 || (!isS2 && log.humidity === -999);
         const isTempIssue = !isError && (log.temperature > settings.temp_max || log.temperature < settings.temp_min);
-        const isHumidIssue = !isError && (log.humidity > settings.humid_max || log.humidity < settings.humid_min);
+        const isHumidIssue = !isS2 && !isError && (log.humidity > settings.humid_max || log.humidity < settings.humid_min);
         
         const problemKey = `sensor_${log.sensor_id}`;
         const sensorName = settings.sensor_names[log.sensor_id] || log.sensor_name;
