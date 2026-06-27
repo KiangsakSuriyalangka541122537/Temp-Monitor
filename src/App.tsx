@@ -674,18 +674,33 @@ export default function App() {
       };
     }
     
-    const errorSensors = sensors.filter(s => s.temperature === -999 || s.humidity === -999);
+    const errorSensors = sensors.filter(s => {
+      const isS2 = s.sensor_id === 2;
+      return s.temperature === -999 || (!isS2 && s.humidity === -999);
+    });
     if (errorSensors.length > 0) {
       return { type: 'error', sensors: errorSensors.map(s => sensorNames[s.sensor_id] || s.sensor_name) };
     }
 
-    const isCritical = (s: SensorLog) => 
-      (s.temperature > settings.temp_max || s.temperature < settings.temp_min) && 
-      (s.humidity > settings.humid_max || s.humidity < settings.humid_min);
+    const isCritical = (s: SensorLog) => {
+      const isS2 = s.sensor_id === 2;
+      const isTempOut = s.temperature > settings.temp_max || s.temperature < settings.temp_min;
+      if (isS2) {
+        return false; // เซนเซอร์ 2 ไม่มีค่าความชื้น จึงไม่เข้าเงื่อนไขวิกฤต (ที่ต้องผิดปกติทั้ง 2 อย่าง)
+      }
+      const isHumidOut = s.humidity > settings.humid_max || s.humidity < settings.humid_min;
+      return isTempOut && isHumidOut;
+    };
     
-    const isWarning = (s: SensorLog) => 
-      s.temperature > settings.temp_max || s.temperature < settings.temp_min || 
-      s.humidity > settings.humid_max || s.humidity < settings.humid_min;
+    const isWarning = (s: SensorLog) => {
+      const isS2 = s.sensor_id === 2;
+      const isTempOut = s.temperature > settings.temp_max || s.temperature < settings.temp_min;
+      if (isS2) {
+        return isTempOut; // เซนเซอร์ 2 ตรวจสอบเฉพาะอุณหภูมิเท่านั้น
+      }
+      const isHumidOut = s.humidity > settings.humid_max || s.humidity < settings.humid_min;
+      return isTempOut || isHumidOut;
+    };
 
     const criticalSensors = sensors.filter(isCritical);
     if (criticalSensors.length > 0) {
