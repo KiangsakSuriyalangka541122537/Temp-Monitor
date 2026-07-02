@@ -5,7 +5,7 @@
 
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { format } from 'date-fns';
-import { Sun, Moon, CheckCircle2, AlertTriangle, Activity, Settings, X, Check, FileText, WifiOff } from 'lucide-react';
+import { Sun, Moon, CheckCircle2, AlertTriangle, Activity, Settings, X, Check, FileText, WifiOff, Send, Smartphone } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Toaster, toast } from 'sonner';
 import { supabase } from './lib/supabase';
@@ -117,6 +117,7 @@ export default function App() {
   }, [showSettings, settings]);
 
   const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [isSendingTest, setIsSendingTest] = useState(false);
 
   useEffect(() => {
     if (!isLoggedIn) {
@@ -200,6 +201,50 @@ export default function App() {
       });
     }
     setIsSavingSettings(false);
+  };
+
+  const sendTestNotification = async () => {
+    if (!localSettings?.line_access_token?.trim() || !localSettings?.line_user_id?.trim()) {
+      toast.error('ข้อมูลไม่ครบถ้วน', {
+        description: 'กรุณากรอกทั้ง LINE Access Token และ User ID ก่อนทำรายการทดสอบ'
+      });
+      return;
+    }
+
+    setIsSendingTest(true);
+    try {
+      const response = await fetch('/api/line/push', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          to: localSettings.line_user_id.trim(),
+          accessToken: localSettings.line_access_token.trim(),
+          messages: [{
+            type: 'text',
+            text: '🔔 [ระบบอุณหภูมิตู้ยา]\n\nทดสอบการส่งข้อความแจ้งเตือนสำเร็จ!\nเว็บแอปพลิเคชันของคุณเชื่อมต่อกับ LINE เรียบร้อยแล้ว 🎉'
+          }]
+        })
+      });
+
+      const resData = await response.json();
+      if (response.ok) {
+        toast.success('ส่งข้อความทดสอบสำเร็จ!', {
+          description: 'กรุณาตรวจสอบแอปพลิเคชัน LINE ของท่าน'
+        });
+      } else {
+        toast.error('ส่งข้อความทดสอบไม่สำเร็จ', {
+          description: resData.error || resData.message || `รหัสข้อผิดพลาด: ${response.status}`
+        });
+      }
+    } catch (err) {
+      toast.error('การเชื่อมต่อล้มเหลว', {
+        description: err instanceof Error ? err.message : 'กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต'
+      });
+    } finally {
+      setIsSendingTest(false);
+    }
   };
 
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
@@ -952,26 +997,25 @@ export default function App() {
               )}
 
               {/* SENSOR CARDS (PRIMARY INFO) */}
-              <div className={`grid gap-3 sm:gap-6 mb-2 sm:mb-3 ${
-                Object.keys(latestData).length === 1 ? 'grid-cols-1' : 
-                Object.keys(latestData).length === 2 ? 'grid-cols-2' :
-                'grid-cols-2 sm:grid-cols-2 lg:grid-cols-4'
-              }`}>
-                {(Object.entries(latestData) as [string, SensorLog][]).map(([id, data]) => (
-                  <div key={id}>
-                    <SensorCard 
-                      data={data} 
-                      sensorName={sensorNames[data.sensor_id] || data.sensor_name} 
-                      onNameChange={(newName) => handleNameChange(data.sensor_id, newName)}
-                      thresholds={{ 
-                        tempMin: settings.temp_min, 
-                        tempMax: settings.temp_max, 
-                        humidMin: settings.humid_min, 
-                        humidMax: settings.humid_max 
-                      }}
-                    />
-                  </div>
-                ))}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-6 mb-2 sm:mb-3">
+                {[1, 2].map((sensorId) => {
+                  const data = latestData[sensorId];
+                  return (
+                    <div key={sensorId}>
+                      <SensorCard 
+                        data={data || null} 
+                        sensorName={sensorNames[sensorId] || (sensorId === 1 ? 'เซนเซอร์ 1 (DHT22)' : 'เซนเซอร์ 2 (DS18B20)')} 
+                        onNameChange={(newName) => handleNameChange(sensorId, newName)}
+                        thresholds={{ 
+                          tempMin: settings.temp_min, 
+                          tempMax: settings.temp_max, 
+                          humidMin: settings.humid_min, 
+                          humidMax: settings.humid_max 
+                        }}
+                      />
+                    </div>
+                  );
+                })}
               </div>
 
               {/* MAIN CONTENT GRID (SECONDARY INFO) */}
@@ -1111,6 +1155,57 @@ export default function App() {
                       className="w-full bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 rounded-xl p-3 outline-none focus:ring-2 focus:ring-zinc-500/50"
                     />
                     <p className="text-xs text-zinc-400">ระยะเวลาขั้นต่ำก่อนจะส่ง LINE แจ้งเตือนซ้ำอีกครั้ง</p>
+                  </div>
+
+                  <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800 space-y-4">
+                    <h3 className="text-sm font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                      ตั้งค่าการแจ้งเตือน LINE (Messaging API)
+                    </h3>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-zinc-500 uppercase tracking-wider block">LINE Channel Access Token</label>
+                      <textarea 
+                        rows={2}
+                        value={localSettings?.line_access_token || ''} 
+                        onChange={(e) => setLocalSettings({...localSettings, line_access_token: e.target.value})}
+                        placeholder="กรอก Channel Access Token ยาวๆ ที่ได้จาก LINE Developer..."
+                        className="w-full bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 rounded-xl p-3 outline-none focus:ring-2 focus:ring-emerald-500/50 text-xs font-mono"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-zinc-500 uppercase tracking-wider block">LINE User ID</label>
+                      <input 
+                        type="text" 
+                        value={localSettings?.line_user_id || ''} 
+                        onChange={(e) => setLocalSettings({...localSettings, line_user_id: e.target.value})}
+                        placeholder="Ua36e33071aed1a4de990b282..."
+                        className="w-full bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 rounded-xl p-3 outline-none focus:ring-2 focus:ring-emerald-500/50 text-sm font-mono"
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-2 pt-2">
+                      <button
+                        type="button"
+                        onClick={sendTestNotification}
+                        disabled={isSendingTest}
+                        className="w-full px-4 py-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 text-xs font-bold border border-emerald-200/50 dark:border-emerald-900/50 hover:bg-emerald-100 dark:hover:bg-emerald-950/50 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                        {isSendingTest ? 'กำลังส่งข้อความทดสอบ...' : 'ทดสอบส่งข้อความแจ้งเตือนไปยัง LINE 🔔'}
+                      </button>
+
+                      <a
+                        href="https://line.me/R/"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="w-full px-4 py-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-xs font-medium border border-zinc-200/20 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors flex items-center justify-center gap-2"
+                      >
+                        <Smartphone className="w-3.5 h-3.5 text-emerald-500" />
+                        เด้งเปิดแอป LINE (เพื่อเพิ่มเพื่อน/คัดลอก ID) 📲
+                      </a>
+                    </div>
                   </div>
                 </div>
 
