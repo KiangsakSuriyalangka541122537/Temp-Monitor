@@ -447,13 +447,21 @@ export default function App() {
 
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [isSendingTest, setIsSendingTest] = useState(false);
-  const [lineErrorDismissed, setLineErrorDismissed] = useState(false);
-
-  useEffect(() => {
-    if (showSettings) {
-      setLineErrorDismissed(false);
+  const [lineErrorDismissed, setLineErrorDismissed] = useState(() => {
+    const until = localStorage.getItem('line_error_dismissed_until');
+    if (until) {
+      const untilTime = parseInt(until, 10);
+      return Date.now() < untilTime;
     }
-  }, [showSettings]);
+    return false;
+  });
+
+  const handleLineErrorDismiss = () => {
+    const twoWeeksInMs = 14 * 24 * 60 * 60 * 1000;
+    const dismissedUntil = Date.now() + twoWeeksInMs;
+    localStorage.setItem('line_error_dismissed_until', dismissedUntil.toString());
+    setLineErrorDismissed(true);
+  };
 
   useEffect(() => {
     if (!isLoggedIn) {
@@ -667,6 +675,7 @@ export default function App() {
   const offlineNotificationCountRef = useRef<number>(0);
   const offlineStartTimeRef = useRef<number | null>(null);
   const sensorErrorStartTimeRef = useRef<Record<number, number>>({});
+  const sensorErrorActiveRef = useRef<Record<number, boolean>>({ 1: false, 2: false });
 
   useEffect(() => {
     offlineStartTimeRef.current = offlineStartTime;
@@ -743,6 +752,7 @@ export default function App() {
       if (isError && !sensorErrorStartTimeRef.current[log.sensor_id]) {
         sensorErrorStartTimeRef.current[log.sensor_id] = Date.now();
       }
+      sensorErrorActiveRef.current[log.sensor_id] = true;
 
       const newAlert: AlertLogType = {
         ...log,
@@ -801,6 +811,22 @@ export default function App() {
         }
       }
     } else {
+      // ตรวจสอบความต้องการแสดงประวัติค่ากลับมาเป็นปกติใน UI
+      if (sensorErrorActiveRef.current[log.sensor_id]) {
+        const recoveredAlert: AlertLogType = {
+          ...log,
+          status: 'recovered'
+        };
+        setAlertLogs(prev => {
+          // ป้องกันการเพิ่มซ้ำในวินาทีเดียวกัน
+          if (prev.length > 0 && prev[0].recorded_at === recoveredAlert.recorded_at && prev[0].sensor_id === recoveredAlert.sensor_id && prev[0].status === 'recovered') {
+            return prev;
+          }
+          return [recoveredAlert, ...prev].slice(0, 50);
+        });
+        sensorErrorActiveRef.current[log.sensor_id] = false;
+      }
+
       // ข้อมูลปกติ ให้รีเซ็ตตัวนับ
       if (sensorErrorStartTimeRef.current[log.sensor_id]) {
         const recoveryTime = Date.now();
@@ -927,8 +953,10 @@ export default function App() {
         const humidMin = Number(settings.humid_min);
         
         const alerts: AlertLogType[] = [];
+        const sensorErrorActive = { 1: false, 2: false };
         
-        for (let i = 0; i < history.length; i++) {
+        // Loop from oldest to newest to capture state transition
+        for (let i = history.length - 1; i >= 0; i--) {
           const log = history[i];
           const baseIdx = i * 2;
           
@@ -953,23 +981,37 @@ export default function App() {
           mappedHistory[baseIdx] = s1;
           mappedHistory[baseIdx + 1] = s2;
 
-          // Check for alerts while mapping to avoid extra loops
+          // Check for alerts while mapping
           [s1, s2].forEach(s => {
             const isS2 = s.sensor_id === 2;
             const isError = s.temperature === -999 || (!isS2 && s.humidity === -999);
             const isTempIssue = !isError && (s.temperature > tempMax || s.temperature < tempMin);
             const isHumidIssue = !isS2 && !isError && (s.humidity > humidMax || s.humidity < humidMin);
+            const isAbnormal = isTempIssue || isHumidIssue || isError;
             
-            if (isTempIssue || isHumidIssue || isError) {
+            if (isAbnormal) {
               alerts.push({
                 ...s,
                 status: isError ? 'error' : (isTempIssue && isHumidIssue ? 'both_high' : isTempIssue ? 'temperature_high' : 'humidity_high')
               });
+              sensorErrorActive[s.sensor_id] = true;
+            } else if (sensorErrorActive[s.sensor_id]) {
+              alerts.push({
+                ...s,
+                status: 'recovered'
+              });
+              sensorErrorActive[s.sensor_id] = false;
             }
           });
         }
         
-        // mappedHistory is already descending by time, so alerts is also descending.
+        // Synchronize our ref with the latest state from history
+        sensorErrorActiveRef.current = sensorErrorActive;
+        
+        // Reverse alerts since they were added chronologically (oldest to newest)
+        // and we want newest alerts first in the UI
+        alerts.reverse();
+        
         setAlertLogs(alerts.slice(0, 100));
         setChartData(mappedHistory.reverse());
       }
@@ -1395,7 +1437,7 @@ export default function App() {
                   </div>
                   <div className="flex items-center gap-2 shrink-0 self-end md:self-auto">
                     <button
-                      onClick={() => setLineErrorDismissed(true)}
+                      onClick={handleLineErrorDismiss}
                       className="shrink-0 text-xs font-bold px-3 py-1.5 rounded-xl bg-zinc-200 hover:bg-zinc-300 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 transition-colors"
                     >
                       รับทราบ
