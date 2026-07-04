@@ -447,6 +447,13 @@ export default function App() {
 
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [isSendingTest, setIsSendingTest] = useState(false);
+  const [lineErrorDismissed, setLineErrorDismissed] = useState(false);
+
+  useEffect(() => {
+    if (showSettings) {
+      setLineErrorDismissed(false);
+    }
+  }, [showSettings]);
 
   useEffect(() => {
     if (!isLoggedIn) {
@@ -1373,7 +1380,7 @@ export default function App() {
               transition={{ duration: 0.2 }}
             >
               {/* LINE API LIMIT REACHED WARNING BANNER */}
-              {(sensorNames as any).line_error === 'limit_reached' && (
+              {(sensorNames as any).line_error === 'limit_reached' && !lineErrorDismissed && (
                 <div className="mb-3 p-4 rounded-3xl border border-red-200 dark:border-red-900/50 bg-red-50/90 dark:bg-red-950/20 text-red-800 dark:text-red-300 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
                   <div className="flex items-start gap-3">
                     <div className="p-2 rounded-full bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-400 shrink-0 mt-0.5 md:mt-0">
@@ -1386,16 +1393,24 @@ export default function App() {
                       </p>
                     </div>
                   </div>
-                  <button
-                    onClick={() => {
-                      setIsLoggedIn(true);
-                      setShowSettings(true);
-                      setActiveSettingsTab('line');
-                    }}
-                    className="shrink-0 text-xs font-bold px-3 py-1.5 rounded-xl bg-red-100 hover:bg-red-200 dark:bg-red-900/40 dark:hover:bg-red-900/60 text-red-700 dark:text-red-400 transition-colors"
-                  >
-                    ดูวิธีแก้ไขด่วน 🛠️
-                  </button>
+                  <div className="flex items-center gap-2 shrink-0 self-end md:self-auto">
+                    <button
+                      onClick={() => setLineErrorDismissed(true)}
+                      className="shrink-0 text-xs font-bold px-3 py-1.5 rounded-xl bg-zinc-200 hover:bg-zinc-300 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 transition-colors"
+                    >
+                      รับทราบ
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsLoggedIn(true);
+                        setShowSettings(true);
+                        setActiveSettingsTab('line');
+                      }}
+                      className="shrink-0 text-xs font-bold px-3 py-1.5 rounded-xl bg-red-100 hover:bg-red-200 dark:bg-red-900/40 dark:hover:bg-red-900/60 text-red-700 dark:text-red-400 transition-colors"
+                    >
+                      ดูวิธีแก้ไขด่วน 🛠️
+                    </button>
+                  </div>
                 </div>
               )}
 
