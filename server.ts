@@ -20,16 +20,41 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json());
-  app.use(express.urlencoded({ extended: true }));
+  // Support parsing JSON even if sent as text/plain or other content types by IoT devices
+  app.use(express.json({ type: ["application/json", "text/plain", "application/octet-stream"] }));
+  app.use(express.urlencoded({ extended: true, type: ["application/x-www-form-urlencoded", "text/plain"] }));
+
+  // Fallback middleware to parse string/raw bodies that weren't parsed by default handlers
+  app.use((req, res, next) => {
+    if (typeof req.body === "string" && req.body.trim()) {
+      try {
+        req.body = JSON.parse(req.body);
+      } catch (e) {
+        try {
+          const params = new URLSearchParams(req.body);
+          const parsed: Record<string, string> = {};
+          for (const [key, value] of params.entries()) {
+            parsed[key] = value;
+          }
+          req.body = parsed;
+        } catch (err) {
+          // Log parsing attempt if it looks like queries/JSON
+          if (req.body.includes("=") || req.body.includes("{")) {
+            console.warn("Could not parse body string:", req.body);
+          }
+        }
+      }
+    }
+    next();
+  });
 
   // Global Request Logger
   app.use((req, res, next) => {
     console.log(`[INCOMING REQUEST] ${req.method} ${req.url}`);
-    if (Object.keys(req.body).length > 0) {
+    if (req.body && Object.keys(req.body).length > 0) {
       console.log("Body:", JSON.stringify(req.body));
     }
-    if (Object.keys(req.query).length > 0) {
+    if (req.query && Object.keys(req.query).length > 0) {
       console.log("Query:", JSON.stringify(req.query));
     }
     next();
@@ -39,24 +64,80 @@ async function startServer() {
   const handleSensorData = async (req: express.Request, res: express.Response) => {
     console.log("Processing sensor data from request...");
     
-    // Support t1, temp1, temp, temperature1, etc.
-    const t1_raw = req.body.t1 ?? req.query.t1 ?? req.body.temperature1 ?? req.query.temperature1 ?? req.body.temp1 ?? req.query.temp1 ?? req.body.temp ?? req.query.temp;
-    const h1_raw = req.body.h1 ?? req.query.h1 ?? req.body.humidity1 ?? req.query.humidity1 ?? req.body.humid1 ?? req.query.humid1 ?? req.body.humid ?? req.query.humid;
-    const t2_raw = req.body.t2 ?? req.query.t2 ?? req.body.temperature2 ?? req.query.temperature2 ?? req.body.temp2 ?? req.query.temp2;
-    const h2_raw = req.body.h2 ?? req.query.h2 ?? req.body.humidity2 ?? req.query.humidity2 ?? req.body.humid2 ?? req.query.humid2;
+    // Support all casing and naming variants for temperature 1 and humidity 1
+    const t1_raw = req.body.t1 ?? req.query.t1 ?? 
+                   req.body.T1 ?? req.query.T1 ?? 
+                   req.body.t ?? req.query.t ?? 
+                   req.body.T ?? req.query.T ?? 
+                   req.body.temperature1 ?? req.query.temperature1 ?? 
+                   req.body.temp1 ?? req.query.temp1 ?? 
+                   req.body.Temp1 ?? req.query.Temp1 ?? 
+                   req.body.temp ?? req.query.temp ?? 
+                   req.body.temperature ?? req.query.temperature ??
+                   req.body.T_1 ?? req.query.T_1;
+
+    const h1_raw = req.body.h1 ?? req.query.h1 ?? 
+                   req.body.H1 ?? req.query.H1 ?? 
+                   req.body.h ?? req.query.h ?? 
+                   req.body.H ?? req.query.H ?? 
+                   req.body.humidity1 ?? req.query.humidity1 ?? 
+                   req.body.humid1 ?? req.query.humid1 ?? 
+                   req.body.Humid1 ?? req.query.Humid1 ?? 
+                   req.body.humid ?? req.query.humid ?? 
+                   req.body.humidity ?? req.query.humidity ??
+                   req.body.H_1 ?? req.query.H_1;
+
+    // Support all casing and naming variants for temperature 2 and humidity 2
+    const t2_raw = req.body.t2 ?? req.query.t2 ?? 
+                   req.body.T2 ?? req.query.T2 ?? 
+                   req.body.temperature2 ?? req.query.temperature2 ?? 
+                   req.body.temp2 ?? req.query.temp2 ?? 
+                   req.body.Temp2 ?? req.query.Temp2 ??
+                   req.body.T_2 ?? req.query.T_2;
+
+    const h2_raw = req.body.h2 ?? req.query.h2 ?? 
+                   req.body.H2 ?? req.query.H2 ?? 
+                   req.body.humidity2 ?? req.query.humidity2 ?? 
+                   req.body.humid2 ?? req.query.humid2 ?? 
+                   req.body.Humid2 ?? req.query.Humid2 ??
+                   req.body.H_2 ?? req.query.H_2;
 
     if (t1_raw === undefined && h1_raw === undefined && t2_raw === undefined) {
-      console.warn("Sensor data endpoint called without valid fields");
+      console.warn("Sensor data parameters missing in request body and query.");
       return res.status(400).json({ 
         success: false, 
         error: "Missing sensor parameters. Please provide at least t1, h1, or t2." 
       });
     }
 
-    const t1 = t1_raw !== undefined ? parseFloat(String(t1_raw)) : 0;
-    const h1 = h1_raw !== undefined ? parseFloat(String(h1_raw)) : 0;
-    const t2 = t2_raw !== undefined ? parseFloat(String(t2_raw)) : 0;
-    const h2 = h2_raw !== undefined ? parseFloat(String(h2_raw)) : 0;
+    // Fetch latest values as fallback if any parameters are missing from this specific transaction
+    let last_t1 = 0;
+    let last_h1 = 0;
+    let last_t2 = 0;
+    let last_h2 = 0;
+
+    try {
+      const { data: latestRow, error: fetchErr } = await supabase
+        .from("Temp-sketch_mar24a")
+        .select("t1, h1, t2, h2")
+        .order("created_at", { ascending: false })
+        .limit(1);
+      
+      if (!fetchErr && latestRow && latestRow.length > 0) {
+        last_t1 = Number(latestRow[0].t1) || 0;
+        last_h1 = Number(latestRow[0].h1) || 0;
+        last_t2 = Number(latestRow[0].t2) || 0;
+        last_h2 = Number(latestRow[0].h2) || 0;
+      }
+    } catch (e) {
+      console.error("Error fetching latest row for fallback:", e);
+    }
+
+    // Apply values: use the new value if supplied, otherwise retain the last known database value
+    const t1 = t1_raw !== undefined ? parseFloat(String(t1_raw)) : last_t1;
+    const h1 = h1_raw !== undefined ? parseFloat(String(h1_raw)) : last_h1;
+    const t2 = t2_raw !== undefined ? parseFloat(String(t2_raw)) : last_t2;
+    const h2 = h2_raw !== undefined ? parseFloat(String(h2_raw)) : last_h2;
 
     try {
       console.log(`Inserting sensor log to Supabase: t1=${t1}, h1=${h1}, t2=${t2}, h2=${h2}`);
@@ -85,14 +166,41 @@ async function startServer() {
     }
   };
 
-  // Register the handleSensorData handler on all common sensor endpoints
+  // 1. Interceptor Middleware: Catch ANY request that contains sensor parameters in query or body
+  // This guarantees that if the Arduino is posting to "/" or any custom path, it is intercepted and saved.
+  app.use(async (req, res, next) => {
+    // Check if it has sensor fields
+    const hasT1 = req.body.t1 !== undefined || req.query.t1 !== undefined || req.body.T1 !== undefined || req.query.T1 !== undefined || req.body.t !== undefined || req.query.t !== undefined || req.body.T !== undefined || req.query.T !== undefined;
+    const hasTemp = req.body.temp !== undefined || req.query.temp !== undefined || req.body.temp1 !== undefined || req.query.temp1 !== undefined || req.body.temperature !== undefined || req.query.temperature !== undefined;
+    const hasTemp2 = req.body.t2 !== undefined || req.query.t2 !== undefined || req.body.T2 !== undefined || req.query.T2 !== undefined;
+    
+    if (hasT1 || hasTemp || hasTemp2) {
+      console.log(`[SENSOR INTERCEPTOR] Intercepted request on ${req.method} ${req.url}`);
+      return handleSensorData(req, res);
+    }
+    next();
+  });
+
+  // 2. Explicitly register handleSensorData on all common sensor endpoints as a fallback
   const sensorPaths = [
     "/api/data",
     "/api/sensor",
     "/api/sensor-data",
+    "/api/sensor_data",
     "/api/insert",
     "/api/logs",
-    "/api/temp"
+    "/api/temp",
+    "/api/write",
+    "/api/update",
+    "/data",
+    "/sensor",
+    "/sensor-data",
+    "/sensor_data",
+    "/insert",
+    "/logs",
+    "/temp",
+    "/write",
+    "/update"
   ];
 
   sensorPaths.forEach(path => {

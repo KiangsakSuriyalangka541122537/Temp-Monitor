@@ -32,10 +32,14 @@ const formatTime = (date: Date) => {
 };
 
 // Send LINE notification (Supports both Messaging API and LINE Notify)
-const sendLineNotification = async (to: string, accessToken: string, message: string) => {
+const sendLineNotification = async (to: string, accessToken: string, message: string, settings?: any) => {
   try {
     if (to && to.trim()) {
       // Use LINE Messaging API (Push Message)
+      if (settings?.sensor_names?.line_error === 'limit_reached') {
+        console.warn('Background Worker: LINE Messaging API is rate limited. Skipping push notification.');
+        return { success: false, status: 429, errorText: 'monthly limit' };
+      }
       const response = await fetch('https://api.line.me/v2/bot/message/push', {
         method: 'POST',
         headers: {
@@ -50,8 +54,10 @@ const sendLineNotification = async (to: string, accessToken: string, message: st
       if (!response.ok) {
         const text = await response.text();
         console.error('Background Worker: LINE Messaging API Error:', response.status, text);
+        return { success: false, status: response.status, errorText: text };
       } else {
         console.log('Background Worker: LINE Messaging notification sent successfully');
+        return { success: true };
       }
     } else {
       // Use LINE Notify
@@ -66,12 +72,64 @@ const sendLineNotification = async (to: string, accessToken: string, message: st
       if (!response.ok) {
         const text = await response.text();
         console.error('Background Worker: LINE Notify Error:', response.status, text);
+        return { success: false, status: response.status, errorText: text };
       } else {
         console.log('Background Worker: LINE Notify sent successfully');
+        return { success: true };
       }
     }
   } catch (error) {
     console.error('Background Worker: Error sending LINE notification:', error);
+    return { success: false, errorText: error instanceof Error ? error.message : String(error) };
+  }
+};
+
+// Update LINE API error status in Supabase so the Web interface can display warning & guides
+const updateLineErrorStatus = async (
+  result: { success: boolean; status?: number; errorText?: string },
+  settings: any
+) => {
+  const currentNames = { ...(settings.sensor_names || {}) };
+  let changed = false;
+
+  if (!result.success) {
+    const isLimitError = result.status === 429 || (result.errorText && result.errorText.includes('monthly limit'));
+    if (isLimitError) {
+      if (currentNames.line_error !== 'limit_reached') {
+        currentNames.line_error = 'limit_reached';
+        currentNames.line_error_time = new Date().toISOString();
+        changed = true;
+      }
+    } else {
+      // Other error (e.g. invalid token, bad user ID, etc.)
+      const errStr = result.errorText || 'unknown_error';
+      // Shorten long text if necessary
+      const shortErr = errStr.length > 200 ? errStr.substring(0, 200) + '...' : errStr;
+      if (currentNames.line_error !== shortErr) {
+        currentNames.line_error = shortErr;
+        currentNames.line_error_time = new Date().toISOString();
+        changed = true;
+      }
+    }
+  } else {
+    // Success - clear errors
+    if (currentNames.line_error) {
+      delete currentNames.line_error;
+      delete currentNames.line_error_time;
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    try {
+      await supabase
+        .from('device_settings')
+        .update({ sensor_names: currentNames })
+        .eq('id', 1);
+      console.log('Background Worker: Updated LINE error status in database:', currentNames.line_error || 'CLEARED');
+    } catch (e) {
+      console.error('Background Worker: Failed to update device_settings with LINE error:', e);
+    }
   }
 };
 
@@ -114,12 +172,12 @@ export const startBackgroundWorker = () => {
         return;
       }
 
-      // Fetch latest log from the correct table
+      // Fetch latest logs from the correct table
       const { data: logsData, error: logsError } = await supabase
         .from('Temp-sketch_mar24a')
         .select('id, created_at, t1, h1, t2, h2')
         .order('created_at', { ascending: false })
-        .limit(1);
+        .limit(10);
 
       if (logsError || !logsData || logsData.length === 0) {
         return;
@@ -127,20 +185,45 @@ export const startBackgroundWorker = () => {
 
       const latestLog = logsData[0];
       
+      // Extract latest non-zero values for each sensor from logs
+      let t1 = 0, h1 = 0, t2 = 0, h2 = 0;
+      let recorded_at_1 = latestLog.created_at;
+      let recorded_at_2 = latestLog.created_at;
+
+      const validT1Row = logsData.find(r => r.t1 && Number(r.t1) !== 0 && Number(r.t1) !== -999);
+      if (validT1Row) {
+        t1 = Number(validT1Row.t1);
+        h1 = Number(validT1Row.h1);
+        recorded_at_1 = validT1Row.created_at;
+      } else {
+        t1 = Number(latestLog.t1) || 0;
+        h1 = Number(latestLog.h1) || 0;
+      }
+
+      const validT2Row = logsData.find(r => r.t2 && Number(r.t2) !== 0 && Number(r.t2) !== -999);
+      if (validT2Row) {
+        t2 = Number(validT2Row.t2);
+        h2 = Number(validT2Row.h2);
+        recorded_at_2 = validT2Row.created_at;
+      } else {
+        t2 = Number(latestLog.t2) || 0;
+        h2 = Number(latestLog.h2) || 0;
+      }
+
       const latestLogsBySensor: Record<number, any> = {
         1: {
           sensor_id: 1,
           sensor_name: settings.sensor_names[1] || 'เซนเซอร์ 1',
-          temperature: Number(latestLog.t1) || 0,
-          humidity: Number(latestLog.h1) || 0,
-          recorded_at: latestLog.created_at
+          temperature: t1,
+          humidity: h1,
+          recorded_at: recorded_at_1
         },
         2: {
           sensor_id: 2,
           sensor_name: settings.sensor_names[2] || 'เซนเซอร์ 2',
-          temperature: Number(latestLog.t2) || 0,
-          humidity: Number(latestLog.h2) || 0,
-          recorded_at: latestLog.created_at
+          temperature: t2,
+          humidity: h2,
+          recorded_at: recorded_at_2
         }
       };
 
@@ -202,7 +285,8 @@ export const startBackgroundWorker = () => {
               `🔹 ${settings.sensor_names[2] || 'เซนเซอร์ 2'}: ${t2} | ${h2}\n` +
               `⏰ เวลาปัจจุบัน: ${formatTime(new Date(now))}`;
             
-            await sendLineNotification(settings.line_user_id, settings.line_access_token, message);
+            const result = await sendLineNotification(settings.line_user_id, settings.line_access_token, message, settings);
+            await updateLineErrorStatus(result, settings);
           }
         }
       } else {
@@ -217,7 +301,8 @@ export const startBackgroundWorker = () => {
           
           const recoveryMessage = `🟢 แจ้งเตือน: ระบบกลับมาใช้งานปกติ (Online)\n📍 สถานะ: เชื่อมต่อสำเร็จ\n🕒 เริ่มหลุดเมื่อ: ${startTimeStr}\n🕒 กลับมาเมื่อ: ${recoveryTimeStr}\n⏱️ รวมเวลาที่ขาดหาย: ${minutes} นาที ${seconds} วินาที\n✅ ระบบกำลังเริ่มบันทึกข้อมูลตามปกติ`;
           
-          await sendLineNotification(settings.line_user_id, settings.line_access_token, recoveryMessage);
+          const result = await sendLineNotification(settings.line_user_id, settings.line_access_token, recoveryMessage, settings);
+          await updateLineErrorStatus(result, settings);
           
           // Reset offline tracking
           offlineStartTime = null;
@@ -227,12 +312,12 @@ export const startBackgroundWorker = () => {
       }
 
       // 2. Handle Sensor Errors and Thresholds
-      Object.values(latestLogsBySensor).forEach((log: any) => {
+      for (const log of Object.values(latestLogsBySensor) as any[]) {
         const logTime = new Date(log.recorded_at).getTime();
         
         // Skip processing old logs (older than 10 minutes)
         if (now - logTime > 10 * 60 * 1000) {
-          return;
+          continue;
         }
 
         const isS2 = log.sensor_id === 2;
@@ -285,7 +370,8 @@ export const startBackgroundWorker = () => {
               message += `\n⏰ เวลา: ${formatTime(new Date(logTime))}`;
             }
 
-            sendLineNotification(settings.line_user_id, settings.line_access_token, message);
+            const result = await sendLineNotification(settings.line_user_id, settings.line_access_token, message, settings);
+            await updateLineErrorStatus(result, settings);
           }
         } else {
           // Normal data. Check for sensor error recovery.
@@ -299,7 +385,8 @@ export const startBackgroundWorker = () => {
               
               const recoveryMessage = `✅ แจ้งเตือน: เซนเซอร์กลับมาใช้งานปกติ\n📍 จุดที่วัด: ${sensorName}\n🕒 เริ่มขัดข้องเมื่อ: ${formatTime(new Date(startTime))}\n🕒 กลับมาเมื่อ: ${formatTime(new Date(logTime))}\n⏱️ รวมเวลาที่ขัดข้อง: ${minutes} นาที ${seconds} วินาที`;
               
-              sendLineNotification(settings.line_user_id, settings.line_access_token, recoveryMessage);
+              const result = await sendLineNotification(settings.line_user_id, settings.line_access_token, recoveryMessage, settings);
+              await updateLineErrorStatus(result, settings);
               
               delete sensorErrorStartTimes[log.sensor_id];
               notificationCountsRef[problemKey] = 0;
@@ -309,7 +396,7 @@ export const startBackgroundWorker = () => {
              notificationCountsRef[problemKey] = 0;
           }
         }
-      });
+      }
 
     } catch (error) {
       console.error('Background Worker: Error in polling loop:', error);
