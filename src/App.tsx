@@ -867,14 +867,14 @@ export default function App() {
         let fallbackH2 = Number(log.h2) || 0;
 
         if (historyRes.data && historyRes.data.length > 0) {
-          if (fallbackT1 === 0 || fallbackT1 === -999 || fallbackH1 === 0) {
+          if (fallbackT1 === 0 || fallbackH1 === 0) {
             const validRow = historyRes.data.find(r => r.t1 && Number(r.t1) !== 0 && Number(r.t1) !== -999);
             if (validRow) {
-              fallbackT1 = Number(validRow.t1);
-              fallbackH1 = Number(validRow.h1);
+              if (fallbackT1 === 0) fallbackT1 = Number(validRow.t1);
+              if (fallbackH1 === 0) fallbackH1 = Number(validRow.h1);
             }
           }
-          if (fallbackT2 === 0 || fallbackT2 === -999) {
+          if (fallbackT2 === 0) {
             const validRow = historyRes.data.find(r => r.t2 && Number(r.t2) !== 0 && Number(r.t2) !== -999);
             if (validRow) {
               fallbackT2 = Number(validRow.t2);
@@ -1049,10 +1049,10 @@ export default function App() {
             const prev1 = prev[1];
             const prev2 = prev[2];
 
-            const t1 = Number(newLog.t1) !== 0 && Number(newLog.t1) !== -999 ? Number(newLog.t1) : (prev1?.temperature || 0);
-            const h1 = Number(newLog.h1) !== 0 && Number(newLog.h1) !== -999 ? Number(newLog.h1) : (prev1?.humidity || 0);
-            const t2 = Number(newLog.t2) !== 0 && Number(newLog.t2) !== -999 ? Number(newLog.t2) : (prev2?.temperature || 0);
-            const h2 = Number(newLog.h2) !== 0 && Number(newLog.h2) !== -999 ? Number(newLog.h2) : (prev2?.humidity || 0);
+            const t1 = Number(newLog.t1) !== 0 ? Number(newLog.t1) : (prev1?.temperature || 0);
+            const h1 = Number(newLog.h1) !== 0 ? Number(newLog.h1) : (prev1?.humidity || 0);
+            const t2 = Number(newLog.t2) !== 0 ? Number(newLog.t2) : (prev2?.temperature || 0);
+            const h2 = Number(newLog.h2) !== 0 ? Number(newLog.h2) : (prev2?.humidity || 0);
 
             const log1: SensorLog = {
               id: newLog.id * 2,

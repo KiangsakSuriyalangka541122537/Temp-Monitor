@@ -128,7 +128,7 @@ export function SensorChart({
         pointHoverRadius: 4,
         borderWidth: 2,
         yAxisID: 'y-temp',
-        spanGaps: true,
+        spanGaps: false,
       });
 
       datasets.push({
@@ -142,7 +142,7 @@ export function SensorChart({
         pointHoverRadius: 4,
         borderWidth: 2,
         yAxisID: 'y-humidity',
-        spanGaps: true,
+        spanGaps: false,
       });
     });
     
