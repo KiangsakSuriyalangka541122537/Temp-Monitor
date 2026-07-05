@@ -887,7 +887,18 @@ export default function App() {
         .order('created_at', { ascending: false })
         .limit(historyLimit);
 
-      const [latestRes, historyRes] = await Promise.all([latestPromise, historyPromise]);
+      const tempMax = Number(settings.temp_max);
+      const tempMin = Number(settings.temp_min);
+      const humidMax = Number(settings.humid_max);
+      const humidMin = Number(settings.humid_min);
+
+      const alertHistoryPromise = supabase
+        .from('Temp-sketch_mar24a')
+        .select('id, created_at, t1, h1, t2, h2')
+        .order('created_at', { ascending: false })
+        .limit(2000);
+
+      const [latestRes, historyRes, alertHistoryRes] = await Promise.all([latestPromise, historyPromise, alertHistoryPromise]);
 
       if (latestRes.data) {
         setIsConnected(true);
@@ -947,19 +958,38 @@ export default function App() {
         const history = historyRes.data;
         const mappedHistory: SensorLog[] = new Array(history.length * 2);
         
-        const tempMax = Number(settings.temp_max);
-        const tempMin = Number(settings.temp_min);
-        const humidMax = Number(settings.humid_max);
-        const humidMin = Number(settings.humid_min);
-        
-        const alerts: AlertLogType[] = [];
-        const sensorErrorActive = { 1: false, 2: false };
-        
-        // Loop from oldest to newest to capture state transition
         for (let i = history.length - 1; i >= 0; i--) {
           const log = history[i];
           const baseIdx = i * 2;
           
+          mappedHistory[baseIdx] = {
+            id: log.id * 2,
+            sensor_id: 1,
+            sensor_name: sensorNames[1] || 'เซนเซอร์ 1',
+            temperature: Number(log.t1) || 0,
+            humidity: Number(log.h1) || 0,
+            recorded_at: log.created_at
+          };
+          
+          mappedHistory[baseIdx + 1] = {
+            id: log.id * 2 + 1,
+            sensor_id: 2,
+            sensor_name: sensorNames[2] || 'เซนเซอร์ 2',
+            temperature: Number(log.t2) || 0,
+            humidity: Number(log.h2) || 0,
+            recorded_at: log.created_at
+          };
+        }
+        
+        setChartData(mappedHistory.reverse());
+      }
+      
+      if (alertHistoryRes && alertHistoryRes.data) {
+        const alerts: AlertLogType[] = [];
+        const sensorErrorActive = { 1: false, 2: false };
+        
+        for (let i = alertHistoryRes.data.length - 1; i >= 0; i--) {
+          const log = alertHistoryRes.data[i];
           const s1: SensorLog = {
             id: log.id * 2,
             sensor_id: 1,
@@ -977,11 +1007,7 @@ export default function App() {
             humidity: Number(log.h2) || 0,
             recorded_at: log.created_at
           };
-          
-          mappedHistory[baseIdx] = s1;
-          mappedHistory[baseIdx + 1] = s2;
 
-          // Check for alerts while mapping
           [s1, s2].forEach(s => {
             const isS2 = s.sensor_id === 2;
             const isError = s.temperature === -999 || (!isS2 && s.humidity === -999);
@@ -990,30 +1016,34 @@ export default function App() {
             const isAbnormal = isTempIssue || isHumidIssue || isError;
             
             if (isAbnormal) {
-              alerts.push({
-                ...s,
-                status: isError ? 'error' : (isTempIssue && isHumidIssue ? 'both_high' : isTempIssue ? 'temperature_high' : 'humidity_high')
-              });
-              sensorErrorActive[s.sensor_id] = true;
-            } else if (sensorErrorActive[s.sensor_id]) {
+              if (!sensorErrorActive[s.sensor_id as 1 | 2]) {
+                alerts.push({
+                  ...s,
+                  status: isError ? 'error' : (isTempIssue && isHumidIssue ? 'both_high' : isTempIssue ? 'temperature_high' : 'humidity_high')
+                });
+                sensorErrorActive[s.sensor_id as 1 | 2] = true;
+              }
+            } else if (sensorErrorActive[s.sensor_id as 1 | 2]) {
               alerts.push({
                 ...s,
                 status: 'recovered'
               });
-              sensorErrorActive[s.sensor_id] = false;
+              sensorErrorActive[s.sensor_id as 1 | 2] = false;
             }
           });
         }
-        
-        // Synchronize our ref with the latest state from history
-        sensorErrorActiveRef.current = sensorErrorActive;
         
         // Reverse alerts since they were added chronologically (oldest to newest)
         // and we want newest alerts first in the UI
         alerts.reverse();
         
+        // Synchronize our ref with the latest state from history
+        sensorErrorActiveRef.current = {
+          1: sensorErrorActive[1],
+          2: sensorErrorActive[2]
+        };
+        
         setAlertLogs(alerts.slice(0, 100));
-        setChartData(mappedHistory.reverse());
       }
 
     } catch (error) {

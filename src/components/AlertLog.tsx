@@ -56,8 +56,8 @@ export function AlertLog({
                   return (
                     <tr key={log.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30 transition-colors group">
                       <td className="px-1 sm:px-6 py-2 sm:py-4 text-zinc-600 dark:text-zinc-400 whitespace-nowrap">
-                        <span className="hidden sm:inline">{format(new Date(log.recorded_at), 'dd/MM/yyyy ')}</span>
-                        {format(new Date(log.recorded_at), 'HH:mm')}
+                        <span className="block sm:inline">{format(new Date(log.recorded_at), 'dd/MM/yyyy ')}</span>
+                        <span className="block sm:inline font-medium">{format(new Date(log.recorded_at), 'HH:mm')}</span>
                       </td>
                       <td className="px-1 sm:px-6 py-2 sm:py-4 text-zinc-900 dark:text-zinc-300 font-medium break-words leading-tight">
                         {sensorNames[log.sensor_id] || log.sensor_name}
