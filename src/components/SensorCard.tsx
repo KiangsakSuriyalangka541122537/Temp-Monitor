@@ -44,7 +44,7 @@ export function SensorCard({ data, sensorName, onNameChange, thresholds }: Senso
 
   const lastSeen = new Date(data.recorded_at).getTime();
   const diffMinutes = (Date.now() - lastSeen) / (1000 * 60);
-  const isOffline = diffMinutes > 10;
+  const isOffline = diffMinutes > 3;
   const isLagging = false; // diffMinutes > 5 && diffMinutes <= 10;
   
   const isSensor2 = data.sensor_id === 2;

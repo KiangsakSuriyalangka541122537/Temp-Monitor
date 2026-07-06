@@ -1,6 +1,6 @@
 import React from 'react';
 import { format } from 'date-fns';
-import { TriangleAlert, Droplets, CheckCircle2 } from 'lucide-react';
+import { TriangleAlert, Droplets, CheckCircle2, WifiOff } from 'lucide-react';
 import { AlertLog as AlertLogType } from '../types';
 
 import { Calendar, Clock, Activity, ArrowRight } from 'lucide-react';
@@ -54,7 +54,7 @@ export function AlertLog({
                   const isHumidIssue = !isRecovered && (log.humidity > thresholds.humidMax || log.humidity < thresholds.humidMin);
                   
                   return (
-                    <tr key={log.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30 transition-colors group">
+                    <tr key={`${log.id}-${log.status}-${new Date(log.recorded_at).getTime()}`} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30 transition-colors group">
                       <td className="px-1 sm:px-6 py-2 sm:py-4 text-zinc-600 dark:text-zinc-400 whitespace-nowrap">
                         <span className="block sm:inline">{format(new Date(log.recorded_at), 'dd/MM/yyyy ')}</span>
                         <span className="block sm:inline font-medium">{format(new Date(log.recorded_at), 'HH:mm')}</span>
@@ -67,14 +67,14 @@ export function AlertLog({
                           <div className="flex items-center justify-center sm:justify-start gap-1">
                             <span className="sm:hidden text-[7px] text-zinc-400 font-bold uppercase">อุณหภูมิ</span>
                             <span className={isRecovered ? 'text-emerald-600 dark:text-emerald-400 font-bold' : isTempIssue ? 'text-red-600 dark:text-red-400 font-bold' : 'text-zinc-500 dark:text-zinc-500'}>
-                              {log.temperature === -999 ? 'ERR' : `${log.temperature.toFixed(1)}°C`}
+                              {log.status === 'offline' ? '-' : log.temperature === -999 ? 'ERR' : `${log.temperature.toFixed(1)}°C`}
                             </span>
                           </div>
                           {log.sensor_id !== 2 && (
                             <div className="flex items-center justify-center sm:justify-start gap-1">
                               <span className="sm:hidden text-[7px] text-zinc-400 font-bold uppercase">ความชื้น</span>
                               <span className={isRecovered ? 'text-emerald-600/90 dark:text-emerald-400/90 font-bold' : isHumidIssue ? 'text-orange-600 dark:text-orange-400 font-bold' : 'text-zinc-500 dark:text-zinc-500'}>
-                                {log.humidity === -999 ? 'ERR' : `${log.humidity.toFixed(0)}%`}
+                                {log.status === 'offline' ? '-' : log.humidity === -999 ? 'ERR' : `${log.humidity.toFixed(0)}%`}
                               </span>
                             </div>
                           )}
@@ -86,6 +86,11 @@ export function AlertLog({
                             <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-500/20 text-[7px] sm:text-[11px] font-bold">
                               <CheckCircle2 className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-emerald-500" />
                               <span>กลับมาปกติ</span>
+                            </span>
+                          ) : log.status === 'offline' ? (
+                            <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800/50 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700/50 text-[7px] sm:text-[11px]">
+                              <WifiOff className="w-2 h-2 sm:w-3 sm:h-3" />
+                              <span>ออฟไลน์</span>
                             </span>
                           ) : log.temperature === -999 || log.humidity === -999 ? (
                             <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 border border-red-100 dark:border-red-500/20 text-[7px] sm:text-[11px]">

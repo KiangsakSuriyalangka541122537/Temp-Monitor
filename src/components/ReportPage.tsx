@@ -545,7 +545,7 @@ export function ReportPage({ sensorNames, thresholds, onBack }: ReportPageProps)
                   </td>
                 </tr>
               ) : (
-                filteredLogs.map((log) => {
+                filteredLogs.map((log, index) => {
                   const isSensorError = log.temperature === -999 || log.humidity === -999;
                   const isNormal = !isSensorError && 
                                    log.temperature <= thresholds.tempMax && 
@@ -553,7 +553,7 @@ export function ReportPage({ sensorNames, thresholds, onBack }: ReportPageProps)
                                    log.humidity <= thresholds.humidMax && 
                                    log.humidity >= thresholds.humidMin;
                   return (
-                    <tr key={log.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30 transition-colors">
+                    <tr key={`${log.id}-${index}`} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30 transition-colors">
                       <td className="px-6 py-4">
                         <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
                           {format(new Date(log.recorded_at), 'dd/MM/yyyy')}

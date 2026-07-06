@@ -721,6 +721,21 @@ export default function App() {
       const minutes = Math.floor(downtimeMs / 60000);
       const seconds = Math.floor((downtimeMs % 60000) / 1000);
       
+      // Add offline and recovered alerts to UI
+      const offlineAlert: AlertLogType = {
+        ...log,
+        recorded_at: new Date(startTime).toISOString(),
+        status: 'offline'
+      };
+      const recoveredAlert: AlertLogType = {
+        ...log,
+        status: 'recovered'
+      };
+      
+      setAlertLogs(prev => {
+        return [recoveredAlert, offlineAlert, ...prev].slice(0, 50);
+      });
+      
       const startTimeStr = format(new Date(startTime), 'HH:mm:ss');
       const recoveryTimeStr = format(new Date(recoveryTime), 'HH:mm:ss');
       
@@ -987,9 +1002,17 @@ export default function App() {
       if (alertHistoryRes && alertHistoryRes.data) {
         const alerts: AlertLogType[] = [];
         const sensorErrorActive = { 1: false, 2: false };
+        const sensorOfflineActive = { 1: false, 2: false };
+        
+        let lastLogTime = alertHistoryRes.data.length > 0 ? new Date(alertHistoryRes.data[alertHistoryRes.data.length - 1].created_at).getTime() : 0;
         
         for (let i = alertHistoryRes.data.length - 1; i >= 0; i--) {
           const log = alertHistoryRes.data[i];
+          const logTime = new Date(log.created_at).getTime();
+          const diffMinutes = (logTime - lastLogTime) / (1000 * 60);
+          const isOfflineGap = diffMinutes > 3;
+          lastLogTime = logTime;
+          
           const s1: SensorLog = {
             id: log.id * 2,
             sensor_id: 1,
@@ -1015,6 +1038,30 @@ export default function App() {
             const isHumidIssue = !isS2 && !isError && (s.humidity > humidMax || s.humidity < humidMin);
             const isAbnormal = isTempIssue || isHumidIssue || isError;
             
+            // Check offline transition first
+            if (isOfflineGap) {
+              if (!sensorOfflineActive[s.sensor_id as 1 | 2]) {
+                // Synthesize an offline alert 3 minutes after the last log
+                alerts.push({
+                  ...s,
+                  recorded_at: new Date(logTime - (diffMinutes - 3) * 60 * 1000).toISOString(),
+                  status: 'offline'
+                });
+                sensorOfflineActive[s.sensor_id as 1 | 2] = true;
+                sensorErrorActive[s.sensor_id as 1 | 2] = false; // Reset error state if offline
+              }
+            }
+            
+            if (sensorOfflineActive[s.sensor_id as 1 | 2]) {
+               // Recovered from offline
+               alerts.push({
+                  ...s,
+                  status: 'recovered'
+               });
+               sensorOfflineActive[s.sensor_id as 1 | 2] = false;
+            }
+            
+            // Then check abnormal transitions
             if (isAbnormal) {
               if (!sensorErrorActive[s.sensor_id as 1 | 2]) {
                 alerts.push({
@@ -1031,6 +1078,33 @@ export default function App() {
               sensorErrorActive[s.sensor_id as 1 | 2] = false;
             }
           });
+        }
+        
+        // Check for ongoing offline gap
+        const currentTime = Date.now();
+        if (lastLogTime > 0 && (currentTime - lastLogTime) > 3 * 60 * 1000) {
+          const s1: SensorLog = {
+            id: 999998,
+            sensor_id: 1,
+            sensor_name: sensorNames[1] || 'เซนเซอร์ 1',
+            temperature: 0,
+            humidity: 0,
+            recorded_at: new Date(lastLogTime + 3 * 60 * 1000).toISOString()
+          };
+          const s2: SensorLog = {
+            id: 999999,
+            sensor_id: 2,
+            sensor_name: sensorNames[2] || 'เซนเซอร์ 2',
+            temperature: 0,
+            humidity: 0,
+            recorded_at: new Date(lastLogTime + 3 * 60 * 1000).toISOString()
+          };
+          if (!sensorOfflineActive[1]) {
+            alerts.push({ ...s1, status: 'offline' });
+          }
+          if (!sensorOfflineActive[2]) {
+            alerts.push({ ...s2, status: 'offline' });
+          }
         }
         
         // Reverse alerts since they were added chronologically (oldest to newest)
@@ -1077,8 +1151,8 @@ export default function App() {
       const lastSeen = new Date(sensors[0].recorded_at).getTime();
       const diffMinutes = (Date.now() - lastSeen) / (1000 * 60);
       
-      // ถ้าไม่มีข้อมูลใหม่เกิน 10 นาที และยังไม่ได้แจ้งเตือนในช่วงเวลาที่กำหนด
-      if (diffMinutes > 10) {
+      // ถ้าไม่มีข้อมูลใหม่เกิน 3 นาที และยังไม่ได้แจ้งเตือนในช่วงเวลาที่กำหนด
+      if (diffMinutes > 3) {
         if (!offlineStartTimeRef.current) {
           setOfflineStartTime(lastSeen);
         }
@@ -1211,10 +1285,10 @@ export default function App() {
     const sensors = Object.values(latestData) as SensorLog[];
     if (sensors.length === 0) return { type: 'loading', sensors: [] };
     
-    // ตรวจสอบว่าเซนเซอร์ออฟไลน์หรือไม่ (ไม่มีข้อมูลใหม่เกิน 10 นาที)
+    // ตรวจสอบว่าเซนเซอร์ออฟไลน์หรือไม่ (ไม่มีข้อมูลใหม่เกิน 3 นาที)
     const lastSeen = new Date(sensors[0].recorded_at).getTime();
     const diffMinutes = (currentTime.getTime() - lastSeen) / (1000 * 60);
-    const isOffline = diffMinutes > 10;
+    const isOffline = diffMinutes > 3;
     const isLagging = false; // diffMinutes > 6 && diffMinutes <= 10;
 
     if (isOffline) {
